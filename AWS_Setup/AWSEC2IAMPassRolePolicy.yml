@@ -1,0 +1,18 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Configure the AWS EC2IAMPassRole Policy to enable passrole for EC2 instances.
+
+Resources:
+  EC2IAMPassRolePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: AWS-EC2IAMPassRole-Policy
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'iam:ListInstanceProfiles'
+              - 'iam:GetRole'
+              - 'iam:PassRole'
+              - 'iam:ListInstanceProfilesForRole'
+            Resource: '*'

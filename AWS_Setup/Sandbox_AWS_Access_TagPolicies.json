@@ -1,0 +1,62 @@
+{
+    "tags": {
+        "Owner": {
+            "tag_key": {
+                "@@assign": "Owner"
+            },
+            "tag_value": {
+                "@@assign": [
+                    "*@eigerit.com",
+                    "dedeepyar",
+                    "srujanak",
+                    "swethac",
+                    "bhavyak",
+                    "sgangiset",
+                    "supriya",
+                    "ltulasig",
+                    "rmoturi"
+                ]
+            },
+            "enforced_for": {
+                "@@assign": [
+                    "ec2:elastic-ip",
+                    "ec2:image",
+                    "ec2:instance",
+                    "ec2:internet-gateway",
+                    "ec2:launch-template",
+                    "ec2:natgateway",
+                    "ec2:security-group",
+                    "ec2:snapshot",
+                    "ec2:subnet",
+                    "ec2:volume",
+                    "ec2:vpc",
+                    "ec2:vpc-endpoint"
+                ]
+            }
+        },
+        "Name": {
+            "tag_key": {
+                "@@assign": "Name"
+            },
+            "tag_value": {
+                "@@assign": [
+                    "*"
+                ]
+            },
+            "enforced_for": {
+                "@@assign": [
+                    "ec2:image",
+                    "ec2:instance",
+                    "ec2:internet-gateway",
+                    "ec2:launch-template",
+                    "ec2:natgateway",
+                    "ec2:security-group",
+                    "ec2:snapshot",
+                    "ec2:subnet",
+                    "ec2:volume",
+                    "ec2:vpc"
+                ]
+            }
+        }
+    }
+}

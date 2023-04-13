@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create CloudWatch Alarm to trigger AWS Lambda function to stop Idle EC2 Instances.
+
+Parameters:
+  EventState:
+    Description: Whether Cloudwatch event schedule is enabled or disabled
+    Type: String
+    Default: ENABLED
+
+Resources:
+  StopEC2IdleLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AWS_StopEC2IdleLambdaRole
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
+
+  CloudWatchAlarmCloudwatchEventEC2:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: Initiate-CloudWatchAlarmsEC2
+      Description: Creates CloudWatch alarms on instance start via Lambda StopEC2IdleLambdaFunction and deletes them on instance termination.
+      EventPattern: '
+        {
+          "source": [
+            "aws.ec2"
+          ],
+          "detail-type": [
+            "EC2 Instance State-change Notification"
+          ],
+          "detail": {
+            "state": [
+              "running",
+              "terminated"
+            ]
+          }
+        }'
+      State: !Ref EventState
+      Targets:
+        - Arn: !GetAtt StopEC2IdleLambdaFunction.Arn
+          Id: LATEST
+
+  StopEC2IdleLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: StopEC2IdleLambdaFunction
+      Role: !GetAtt StopEC2IdleLambdaRole.Arn
+      Runtime: python3.9
+      Handler: index.ec2_handler
+      Timeout: 600
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          import logging
+          import datetime
+          import dateutil
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          region = os.environ.get('AWS_REGION')
+          cpuEc2StopThreshold = int(os.environ.get('ALARM_CPU_EC2STOP_THRESHOLD'))
+          alarmEvalPeriods = int(os.environ.get('ALARM_EVALUATION_PERIODS'))
+          alarmPeriod = int(os.environ.get('ALARM_PERIOD'))
+          resetalarmstate = 'INSUFFICIENT_DATA'
+
+          def put_cpu_alarm(instance_id, alarmname):
+              cloudWatch   = boto3.client('cloudwatch')
+              logger.info('Adding CPU IDLE ALARM for {} ...'.format(instance_id))
+              cloudWatch.put_metric_alarm(
+                  AlarmName          = f'CPU_ALARM_EC2STOP_{instance_id}',
+                  AlarmDescription   = 'Alarm when server CPU does not exceed' + ' ' + str(cpuEc2StopThreshold) + '%',
+                  AlarmActions       = ['arn:aws:automate:' + region + ':ec2:stop'],
+                  MetricName         = 'CPUUtilization',
+                  Namespace          = 'AWS/EC2' ,
+                  Statistic          = 'Average',
+                  Dimensions         = [{'Name': 'InstanceId', 'Value': instance_id}],
+                  Period             = alarmPeriod,
+                  EvaluationPeriods  = alarmEvalPeriods,
+                  Threshold          = cpuEc2StopThreshold,
+                  ComparisonOperator = 'LessThanOrEqualToThreshold',
+                  TreatMissingData   = 'notBreaching'
+              )
+
+          def delete_cpu_alarm(instance_id, alarmname):
+              cloudWatch   = boto3.client('cloudwatch')
+              logger.info('Deleting CPU IDLE ALARM for {} ...'.format(instance_id))
+              cloudWatch.delete_alarms(
+                AlarmNames=[f'CPU_ALARM_EC2STOP_{instance_id}'],
+              )
+
+          def reset_cpu_alarm(instance_id, alarmname, alarmstate):
+              cloudWatch   = boto3.client('cloudwatch')
+              logger.info('Resetting CPU IDLE ALARM for {} to {}...'.format(instance_id, alarmstate))
+              cloudWatch.set_alarm_state(
+                AlarmName=f'CPU_ALARM_EC2STOP_{instance_id}',
+                StateValue=alarmstate,
+                StateReason='Resetting to' + ' ' + alarmstate
+              )
+
+          def ec2_handler(event, context):
+              instance_id = event['detail']['instance-id']
+              instance_state = event['detail']['state']
+              ec2 = boto3.resource('ec2')
+              alarmname = f'CPU_ALARM_EC2STOP_{instance_id}'
+              instance = ec2.Instance(instance_id)
+              if instance_state == "running":
+                  put_cpu_alarm(instance_id, alarmname)
+              if instance_state == "terminated":
+                  delete_cpu_alarm(instance_id, alarmname)
+              if instance_state == "stopped":
+                  delete_cpu_alarm(instance_id, alarmname, resetalarmstate)
+      Environment:
+        Variables:
+          ALARM_TAG: Owner
+          CREATE_DEFAULT_ALARMS: true
+          CLOUDWATCH_NAMESPACE: CWAgent
+          ALARM_CPU_EC2STOP_THRESHOLD: "5"
+          ALARM_EVALUATION_PERIODS: "6"
+          ALARM_PERIOD: "600"
+
+  LambdaInvokePermissionCloudwatchEventsEC2:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt
+        - StopEC2IdleLambdaFunction
+        - Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt
+        - CloudWatchAlarmCloudwatchEventEC2
+        - Arn

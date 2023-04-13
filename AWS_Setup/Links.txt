@@ -1,0 +1,62 @@
+AWS Introduction and Ec2:
+
+AWS In 10 Minutes | AWS Tutorial For Beginners | AWS Training Video | AWS Tutorial | Simplilearn
+https://youtu.be/r4YIdn2eTm4
+
+Intro to AWS - The Most Important Services To Learn
+https://youtu.be/FDEpdNdFglI
+
+AWS - Regions, AZ Availability Zones, Service Limits, Edge Locations, CloudFront
+https://youtu.be/el4LVOxBRXI
+
+AWS EC2 Pricing Examples - On Demand, Reserved, Spot, Scheduled & Dedicated
+https://youtu.be/fVV6BGGQfHQ
+
+AWS - EC2, AMI, EBS & Instance Storage, Instance Types - Launching Windows EC2 DEMO
+https://youtu.be/NaQN0oV_gpY
+
+AWS - Security Groups DEMO - Inbound and Outbound Rules - Security on Cloud
+https://youtu.be/k5yvD4ykPcI
+
+AWS - Public & Private EC2 Instances | NACL Rules & Priority | NAT Gateway
+https://youtu.be/9bXm82AjWWg
+
+AWS - Difference between Elastic, Public & Private IP | DEMO
+https://youtu.be/MTBR9jyD5RM
+
+AWS - EC2 Reservation Types - Standard, Convertible, Regional Reservation | Examples
+https://youtu.be/BiFBN71oUG4
+
+Storage:
+
+AWS Storage - S3 vs EBS vs EFS Comparison | When to use?
+https://youtu.be/m9mKzdBE90I
+
+AWS EBS DEMO - Resizing & Changing Type, EBS Snapshot, Attach & Detach EBS
+https://youtu.be/HTefwhNticU
+
+AWS - Shared, Dedicated Instances & Dedicated Host Differences - EC2 Tenancy Models
+https://youtu.be/sOsALtwltLQ
+
+
+VPC:
+AWS - VPC Demo, Public & Private Subnets, Route Tables, Internet & NAT Gateways
+https://youtu.be/tD9vDv0uyI8
+
+AWS - VPC Peering - Concept & DEMO | 2 VPC with in a region
+https://youtu.be/_LR1RUKe91g
+
+AWS - VPC Peering across TWO Regions | Demo | Cross-region VPC Peering
+https://youtu.be/KmCEFGDTb8U
+
+
+IAM:
+
+AWS Security - IAM (Part-1) | Users, Groups, Policy - Identity & Access Management
+https://youtu.be/DXNS-EP9sXM
+
+AWS Security - IAM (Part-2) | Roles, Trust Relationship - Identity & Access Management
+https://youtu.be/z9MOPMxnCjY
+
+AWS IAM Roles Types - Service Role vs Service-Linked Role - Comparison
+https://youtu.be/Uuw0OXXp7W8
