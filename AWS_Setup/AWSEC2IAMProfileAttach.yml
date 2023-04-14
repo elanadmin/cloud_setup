@@ -2,10 +2,18 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: Create AWS Lambda function to attach Default IAM Instance Profile or Policy to EC2 Instances.
 
 Parameters:
-  EventState:
+  eventState:
     Description: Whether Cloudwatch event schedule is enabled or disabled
     Type: String
     Default: ENABLED
+  defaultInstanceProfileName:
+    Description: Default InstanceProfileName to be Attached to Instances.
+    Type: String
+    Default: 'AmazonEC2RoleforSSM'
+  defaultInstancePolicyName:
+    Description: Default InstancePolicyArn to be Attached to InstanceProfile.
+    Type: String
+    Default: 'AmazonSSMManagedInstanceCore'
 
 Resources:
   EC2ProfileLambdaFunctionRole:
@@ -21,20 +29,6 @@ Resources:
       Path: /
       ManagedPolicyArns:
         - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
-
-  EventsInvokeLambdaFunctionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: AWS_EventsInvokeLambdaFunctionRole
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: events.amazonaws.com
-            Action: sts:AssumeRole
-      Path: /
-      ManagedPolicyArns:
-        - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
   
   CloudwatchEventEC2:
     Type: AWS::Events::Rule
@@ -42,7 +36,6 @@ Resources:
     Properties:
       Name: Initiate-EC2ProfileAttach
       Description: Triggers EC2ProfileAttach Lambda Function on Instance Start to Attach default IAM InstanceRole/Policy.
-      RoleArn: !GetAtt 'EventsInvokeLambdaFunctionRole.Arn'
       EventPattern:
             source:
               - aws.ec2
@@ -55,8 +48,8 @@ Resources:
                 - RunInstances
                 - AssociateIamInstanceProfile
                 - ReplaceIamInstanceProfileAssociation
-                - StartInstances
-      State: !Ref EventState
+                - DisassociateIamInstanceProfile
+      State: !Ref eventState
       Targets:
         - Arn: !GetAtt 'EC2ProfileLambdaFunction.Arn'
           Id: EC2ProfileLambdaFunction
@@ -88,19 +81,25 @@ Resources:
           import logging
           import json
           import boto3
+          import sys
           from botocore.exceptions import ClientError
-
-          defaultInstanceProfileName = "AmazonEC2RoleforSSM"
-          defaultInstancePolicyName = "AmazonSSMManagedInstanceCore"
 
           def find_rolename(event):
               """Function to find IAM Role."""
+              log.info('eventName: %s' % event["detail"]["eventName"])
+              rolename = "false"
               if event["detail"]["eventName"] == "AssociateIamInstanceProfile":
                   rolename = event["detail"]["requestParameters"]["AssociateIamInstanceProfileRequest"]["IamInstanceProfile"]["Name"]
               if event["detail"]["eventName"] == "ReplaceIamInstanceProfileAssociation":
                   rolename = event["detail"]["requestParameters"]["ReplaceIamInstanceProfileAssociationRequest"]["IamInstanceProfile"]["Name"]
-              if event["detail"]["eventName"] == "RunInstances" and "iamInstanceProfile" in event["detail"]["requestParameters"]:
-                  rolename = event["detail"]["requestParameters"]["iamInstanceProfile"]["arn"].split('/')[1]
+              if event["detail"]["eventName"] == "RunInstances":
+                  if "iamInstanceProfile" in event["detail"]["requestParameters"]:
+                      if "arn" in event["detail"]["requestParameters"]["iamInstanceProfile"]:
+                          rolename = event["detail"]["requestParameters"]["iamInstanceProfile"]["arn"].split('/')[1]
+                      if "name" in event["detail"]["requestParameters"]["iamInstanceProfile"]:
+                          rolename = event["detail"]["requestParameters"]["iamInstanceProfile"]["name"]
+              if event["detail"]["eventName"] == "DisassociateIamInstanceProfile":
+                  rolename = "false"
               return rolename
 
           def find_ec2(event):
@@ -111,6 +110,8 @@ Resources:
                   ec2instance = event["detail"]["responseElements"]["ReplaceIamInstanceProfileAssociationResponse"]["iamInstanceProfileAssociation"]["instanceId"]
               if event["detail"]["eventName"] == "RunInstances":
                   ec2instance = event["detail"]["responseElements"]["instancesSet"]["items"][0]["instanceId"]
+              if event["detail"]["eventName"] == "DisassociateIamInstanceProfile":
+                  ec2instance = event["detail"]["responseElements"]["DisassociateIamInstanceProfileResponse"]["iamInstanceProfileAssociation"]["instanceId"]
               return ec2instance
 
           def setup_logging():
@@ -138,7 +139,8 @@ Resources:
               """
               Function to attach Default InstanceProfile/Role to EC2 Instance.
               """
-              client = boto3.client('iam')
+              log.info("Attaching Default IAM InstanceProfile %s to %s ..." % (instanceprofile, ec2instancename))
+              client = boto3.client('ec2')
               response = client.associate_iam_instance_profile(
               IamInstanceProfile={
                   'Name': instanceprofile
@@ -147,24 +149,32 @@ Resources:
               )
               log.info('RESPONSE: %s' % response)
 
-          def attach_policy(ec2instancename, instanceprofile, instancepolicy):
+          def attach_policy(ec2instancename, instanceprofile, instancepolicy, instancepolicyarn):
               """
               Function to attach default IAM policy to the Attached IAM Instance Role.
               """
-              client = boto3.client('iam')
-              qpolicies = client.list_attached_role_policies(RoleName=instanceprofile)
               allpolicies = []
-              for policy in qpolicies:
+              client = boto3.client('iam')
+              ipresponse = client.get_instance_profile(
+                  InstanceProfileName = instanceprofile
+              )
+
+              instanceprofilerole=ipresponse['InstanceProfile']['Roles'][0]['RoleName']
+              qpolicies = client.list_attached_role_policies(RoleName=instanceprofilerole)
+
+              for policy in qpolicies['AttachedPolicies']:
                   policyversion = client.get_policy(PolicyArn=policy["PolicyArn"])
                   policyname = policyversion["Policy"]["PolicyName"]
                   allpolicies.append(policyname)       
               if instancepolicy not in allpolicies:
-                  policyarn = f'arn:aws:iam::aws:policy/{instancepolicy}'
+                  log.info("Attaching Default IAM InstancePolicy %s to %s for %s ..." % (instancepolicy, instanceprofile, ec2instancename))
                   response = client.attach_role_policy(
-                      RoleName=instanceprofile,
-                      PolicyArn=policyarn
+                      RoleName=instanceprofilerole,
+                      PolicyArn=instancepolicyarn
                   )
                   log.info('RESPONSE: %s' % response)
+              else:
+                  log.info('Default IAM InstancePolicy %s is already assigned to the InstanceProfile %s attached to %s ...' % (instancepolicy, instanceprofile, ec2instancename))
 
           def lambda_handler(event, context):
               """
@@ -172,28 +182,36 @@ Resources:
               If no IAM Profile found, throws violation.
               If IAM Profile found, checks polices attached to the role.
               """
+              
+              stsclient = boto3.client('sts')
+              accountID = stsclient.get_caller_identity()['Account']
+              region = os.environ.get('AWS_REGION')
+              defaultInstanceProfileName = os.environ['defaultInstanceProfileName']
+              defaultInstancePolicyArn = os.environ['defaultInstancePolicyArn']
+              defaultInstancePolicyName = defaultInstancePolicyArn.split('/')[1]
+
               setup_logging()
               log.info('Lambda received event:')
               log.info(json.dumps(event))
-              violations = []
               ec2instancename = find_ec2(event)
               try:
                   instanceprofile = find_rolename(event)
+                  if instanceprofile == "false":
+                      log.info("No IAM InstanceProfile Attached to %s ..." % ec2instancename)
+                      instanceprofile = ''
               except Exception as e:
                   log.info("Exception thrown: %s" % str(e))
-                  log.info("No IAM InstanceProfile Attached to %s" % ec2instancename)
-                  instanceprofile = ''
-                  pass
+                  sys.exit()
                   
               if instanceprofile:
                   if instanceprofile != defaultInstanceProfileName:
-                      log.info("Attaching Default IAM Policy %s to %s for %s" % (defaultInstancePolicyName, instanceprofile, ec2instancename))
-                      attach_policy(event, ec2instancename, instanceprofile, defaultInstancePolicyName)
+                      attach_policy(ec2instancename, instanceprofile, defaultInstancePolicyName, defaultInstancePolicyArn)
                   else:
-                      log.info("Default IAM Policy %s is already attached to %s" % (defaultInstance, ec2instancename))
+                      log.info("Default IAM InstanceProfile %s is already attached to %s ..." % (defaultInstanceProfileName, ec2instancename))
               else:
-                  log.info("Attaching Default IAM InstanceProfile %s to %s" % (defaultInstanceProfileName, ec2instancename))
                   attach_role(ec2instancename, defaultInstanceProfileName)
       Environment:
         Variables:
           logging_level: INFO
+          defaultInstanceProfileName: !Ref defaultInstanceProfileName
+          defaultInstancePolicyArn: !Sub 'arn:aws:iam::${AWS::AccountId}:policy/${defaultInstancePolicyName}'
