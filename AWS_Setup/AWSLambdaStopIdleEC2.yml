@@ -1,17 +1,25 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Create CloudWatch Alarm to trigger AWS Lambda function to stop Idle EC2 Instances.
+Description: Create AWS Lambda function to attach Default IAM Instance Profile or Policy to EC2 Instances.
 
 Parameters:
-  EventState:
+  eventState:
     Description: Whether Cloudwatch event schedule is enabled or disabled
     Type: String
     Default: ENABLED
+  defaultInstanceProfileName:
+    Description: Default InstanceProfileName to be Attached to Instances.
+    Type: String
+    Default: 'AmazonEC2RoleforSSM'
+  defaultInstancePolicyName:
+    Description: Default InstancePolicyArn to be Attached to InstanceProfile.
+    Type: String
+    Default: 'AmazonSSMManagedInstanceCore'
 
 Resources:
-  StopEC2IdleLambdaRole:
+  EC2ProfileLambdaFunctionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: AWS_StopEC2IdleLambdaRole
+      RoleName: AWS_EC2ProfileLambdaFunctionRole
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -21,119 +29,189 @@ Resources:
       Path: /
       ManagedPolicyArns:
         - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
-
-  CloudWatchAlarmCloudwatchEventEC2:
+  
+  CloudwatchEventEC2:
     Type: AWS::Events::Rule
+    DependsOn: EC2ProfileLambdaFunction
     Properties:
-      Name: Initiate-CloudWatchAlarmsEC2
-      Description: Creates CloudWatch alarms on instance start via Lambda StopEC2IdleLambdaFunction and deletes them on instance termination.
-      EventPattern: '
-        {
-          "source": [
-            "aws.ec2"
-          ],
-          "detail-type": [
-            "EC2 Instance State-change Notification"
-          ],
-          "detail": {
-            "state": [
-              "running",
-              "terminated"
-            ]
-          }
-        }'
-      State: !Ref EventState
+      Name: Initiate-EC2ProfileAttach
+      Description: Triggers EC2ProfileAttach Lambda Function on Instance Start to Attach default IAM InstanceRole/Policy.
+      EventPattern:
+            source:
+              - aws.ec2
+            detail-type:
+              - "AWS API Call via CloudTrail"
+            detail:
+              eventSource:
+                - ec2.amazonaws.com
+              eventName:
+                - RunInstances
+                - AssociateIamInstanceProfile
+                - ReplaceIamInstanceProfileAssociation
+                - DisassociateIamInstanceProfile
+      State: !Ref eventState
       Targets:
-        - Arn: !GetAtt StopEC2IdleLambdaFunction.Arn
-          Id: LATEST
-
-  StopEC2IdleLambdaFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: StopEC2IdleLambdaFunction
-      Role: !GetAtt StopEC2IdleLambdaRole.Arn
-      Runtime: python3.9
-      Handler: index.ec2_handler
-      Timeout: 600
-      Code:
-        ZipFile: |
-          import boto3
-          import os
-          import logging
-          import datetime
-          import dateutil
-
-          logger = logging.getLogger()
-          logger.setLevel(logging.INFO)
-          region = os.environ.get('AWS_REGION')
-          cpuEc2StopThreshold = int(os.environ.get('ALARM_CPU_EC2STOP_THRESHOLD'))
-          alarmEvalPeriods = int(os.environ.get('ALARM_EVALUATION_PERIODS'))
-          alarmPeriod = int(os.environ.get('ALARM_PERIOD'))
-          resetalarmstate = 'INSUFFICIENT_DATA'
-
-          def put_cpu_alarm(instance_id, alarmname):
-              cloudWatch   = boto3.client('cloudwatch')
-              logger.info('Adding CPU IDLE ALARM for {} ...'.format(instance_id))
-              cloudWatch.put_metric_alarm(
-                  AlarmName          = f'CPU_ALARM_EC2STOP_{instance_id}',
-                  AlarmDescription   = 'Alarm when server CPU does not exceed' + ' ' + str(cpuEc2StopThreshold) + '%',
-                  AlarmActions       = ['arn:aws:automate:' + region + ':ec2:stop'],
-                  MetricName         = 'CPUUtilization',
-                  Namespace          = 'AWS/EC2' ,
-                  Statistic          = 'Average',
-                  Dimensions         = [{'Name': 'InstanceId', 'Value': instance_id}],
-                  Period             = alarmPeriod,
-                  EvaluationPeriods  = alarmEvalPeriods,
-                  Threshold          = cpuEc2StopThreshold,
-                  ComparisonOperator = 'LessThanOrEqualToThreshold',
-                  TreatMissingData   = 'notBreaching'
-              )
-
-          def delete_cpu_alarm(instance_id, alarmname):
-              cloudWatch   = boto3.client('cloudwatch')
-              logger.info('Deleting CPU IDLE ALARM for {} ...'.format(instance_id))
-              cloudWatch.delete_alarms(
-                AlarmNames=[f'CPU_ALARM_EC2STOP_{instance_id}'],
-              )
-
-          def reset_cpu_alarm(instance_id, alarmname, alarmstate):
-              cloudWatch   = boto3.client('cloudwatch')
-              logger.info('Resetting CPU IDLE ALARM for {} to {}...'.format(instance_id, alarmstate))
-              cloudWatch.set_alarm_state(
-                AlarmName=f'CPU_ALARM_EC2STOP_{instance_id}',
-                StateValue=alarmstate,
-                StateReason='Resetting to' + ' ' + alarmstate
-              )
-
-          def ec2_handler(event, context):
-              instance_id = event['detail']['instance-id']
-              instance_state = event['detail']['state']
-              ec2 = boto3.resource('ec2')
-              alarmname = f'CPU_ALARM_EC2STOP_{instance_id}'
-              instance = ec2.Instance(instance_id)
-              if instance_state == "running":
-                  put_cpu_alarm(instance_id, alarmname)
-              if instance_state == "terminated":
-                  delete_cpu_alarm(instance_id, alarmname)
-              if instance_state == "stopped":
-                  delete_cpu_alarm(instance_id, alarmname, resetalarmstate)
-      Environment:
-        Variables:
-          ALARM_TAG: Owner
-          CREATE_DEFAULT_ALARMS: true
-          CLOUDWATCH_NAMESPACE: CWAgent
-          ALARM_CPU_EC2STOP_THRESHOLD: "5"
-          ALARM_EVALUATION_PERIODS: "6"
-          ALARM_PERIOD: "600"
-
-  LambdaInvokePermissionCloudwatchEventsEC2:
+        - Arn: !GetAtt 'EC2ProfileLambdaFunction.Arn'
+          Id: EC2ProfileLambdaFunction
+  
+  LambdaInvokePermEC2ProfileLambdaFunction:
     Type: AWS::Lambda::Permission
+    DependsOn: EC2ProfileLambdaFunction
     Properties:
       FunctionName: !GetAtt
-        - StopEC2IdleLambdaFunction
+        - EC2ProfileLambdaFunction
         - Arn
       Action: 'lambda:InvokeFunction'
       Principal: events.amazonaws.com
       SourceArn: !GetAtt
-        - CloudWatchAlarmCloudwatchEventEC2
+        - CloudwatchEventEC2
         - Arn
+
+  EC2ProfileLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: EC2ProfileLambdaFunction
+      Role: !GetAtt 'EC2ProfileLambdaFunctionRole.Arn'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Timeout: 600
+      Code:
+        ZipFile: |
+          import os
+          import logging
+          import json
+          import boto3
+          import sys
+          from botocore.exceptions import ClientError
+
+          def find_rolename(event):
+              """Function to find IAM Role."""
+              log.info('eventName: %s' % event["detail"]["eventName"])
+              rolename = "false"
+              if event["detail"]["eventName"] == "AssociateIamInstanceProfile":
+                  rolename = event["detail"]["requestParameters"]["AssociateIamInstanceProfileRequest"]["IamInstanceProfile"]["Name"]
+              if event["detail"]["eventName"] == "ReplaceIamInstanceProfileAssociation":
+                  rolename = event["detail"]["requestParameters"]["ReplaceIamInstanceProfileAssociationRequest"]["IamInstanceProfile"]["Name"]
+              if event["detail"]["eventName"] == "RunInstances":
+                  if "iamInstanceProfile" in event["detail"]["requestParameters"]:
+                      if "arn" in event["detail"]["requestParameters"]["iamInstanceProfile"]:
+                          rolename = event["detail"]["requestParameters"]["iamInstanceProfile"]["arn"].split('/')[1]
+                      if "name" in event["detail"]["requestParameters"]["iamInstanceProfile"]:
+                          rolename = event["detail"]["requestParameters"]["iamInstanceProfile"]["name"]
+              if event["detail"]["eventName"] == "DisassociateIamInstanceProfile":
+                  rolename = "false"
+              return rolename
+
+          def find_ec2(event):
+              """Function to find EC2 Instance ID."""
+              if event["detail"]["eventName"] == "AssociateIamInstanceProfile":
+                  ec2instance = event["detail"]["requestParameters"]["AssociateIamInstanceProfileRequest"]["InstanceId"]
+              if event["detail"]["eventName"] == "ReplaceIamInstanceProfileAssociation":
+                  ec2instance = event["detail"]["responseElements"]["ReplaceIamInstanceProfileAssociationResponse"]["iamInstanceProfileAssociation"]["instanceId"]
+              if event["detail"]["eventName"] == "RunInstances":
+                  ec2instance = event["detail"]["responseElements"]["instancesSet"]["items"][0]["instanceId"]
+              if event["detail"]["eventName"] == "DisassociateIamInstanceProfile":
+                  ec2instance = event["detail"]["responseElements"]["DisassociateIamInstanceProfileResponse"]["iamInstanceProfileAssociation"]["instanceId"]
+              return ec2instance
+
+          def setup_logging():
+              """
+              Logging Function.
+              Creates a global log object and sets its level.
+              """
+              global log
+              log = logging.getLogger()
+              log_levels = {'INFO': 20, 'WARNING': 30, 'ERROR': 40}
+
+              if 'logging_level' in os.environ:
+                  log_level = os.environ['logging_level'].upper()
+                  if log_level in log_levels:
+                      log.setLevel(log_levels[log_level])
+                  else:
+                      log.setLevel(log_levels['ERROR'])
+                      log.error("The logging_level environment variable is not set to INFO, WARNING, or \
+                                  ERROR.  The log level is set to ERROR")
+              else:
+                  log.setLevel(log_levels['INFO'])
+              log.info('Logging setup complete - set to log level ' + str(log.getEffectiveLevel()))
+
+          def attach_role(ec2instancename, instanceprofile):
+              """
+              Function to attach Default InstanceProfile/Role to EC2 Instance.
+              """
+              log.info("Attaching Default IAM InstanceProfile %s to %s ..." % (instanceprofile, ec2instancename))
+              client = boto3.client('ec2')
+              response = client.associate_iam_instance_profile(
+              IamInstanceProfile={
+                  'Name': instanceprofile
+              },
+              InstanceId=ec2instancename
+              )
+              log.info('RESPONSE: %s' % response)
+
+          def attach_policy(ec2instancename, instanceprofile, instancepolicy, instancepolicyarn):
+              """
+              Function to attach default IAM policy to the Attached IAM Instance Role.
+              """
+              allpolicies = []
+              client = boto3.client('iam')
+              ipresponse = client.get_instance_profile(
+                  InstanceProfileName = instanceprofile
+              )
+
+              instanceprofilerole=ipresponse['InstanceProfile']['Roles'][0]['RoleName']
+              qpolicies = client.list_attached_role_policies(RoleName=instanceprofilerole)
+
+              for policy in qpolicies['AttachedPolicies']:
+                  policyversion = client.get_policy(PolicyArn=policy["PolicyArn"])
+                  policyname = policyversion["Policy"]["PolicyName"]
+                  allpolicies.append(policyname)       
+              if instancepolicy not in allpolicies:
+                  log.info("Attaching Default IAM InstancePolicy %s to %s for %s ..." % (instancepolicy, instanceprofile, ec2instancename))
+                  response = client.attach_role_policy(
+                      RoleName=instanceprofilerole,
+                      PolicyArn=instancepolicyarn
+                  )
+                  log.info('RESPONSE: %s' % response)
+              else:
+                  log.info('Default IAM InstancePolicy %s is already assigned to the InstanceProfile %s attached to %s ...' % (instancepolicy, instanceprofile, ec2instancename))
+
+          def lambda_handler(event, context):
+              """
+              Main function: Checks if EC2 Instance is launched with IAM Profile.
+              If no IAM Profile found, throws violation.
+              If IAM Profile found, checks polices attached to the role.
+              """
+              
+              stsclient = boto3.client('sts')
+              accountID = stsclient.get_caller_identity()['Account']
+              region = os.environ.get('AWS_REGION')
+              defaultInstanceProfileName = os.environ['defaultInstanceProfileName']
+              defaultInstancePolicyArn = os.environ['defaultInstancePolicyArn']
+              defaultInstancePolicyName = defaultInstancePolicyArn.split('/')[1]
+
+              setup_logging()
+              log.info('Lambda received event:')
+              log.info(json.dumps(event))
+              ec2instancename = find_ec2(event)
+              try:
+                  instanceprofile = find_rolename(event)
+                  if instanceprofile == "false":
+                      log.info("No IAM InstanceProfile Attached to %s ..." % ec2instancename)
+                      instanceprofile = ''
+              except Exception as e:
+                  log.info("Exception thrown: %s" % str(e))
+                  sys.exit()
+                  
+              if instanceprofile:
+                  if instanceprofile != defaultInstanceProfileName:
+                      attach_policy(ec2instancename, instanceprofile, defaultInstancePolicyName, defaultInstancePolicyArn)
+                  else:
+                      log.info("Default IAM InstanceProfile %s is already attached to %s ..." % (defaultInstanceProfileName, ec2instancename))
+              else:
+                  attach_role(ec2instancename, defaultInstanceProfileName)
+      Environment:
+        Variables:
+          logging_level: INFO
+          defaultInstanceProfileName: !Ref defaultInstanceProfileName
+          defaultInstancePolicyArn: !Sub 'arn:aws:iam::${AWS::AccountId}:policy/${defaultInstancePolicyName}'
