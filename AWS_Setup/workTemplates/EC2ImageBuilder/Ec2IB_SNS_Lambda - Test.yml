@@ -1,0 +1,281 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Resources for Lambda function to trigger SSM Automation and Update SSM Parameter.
+
+Resources:
+  ImageBuilderSNSTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      DisplayName: "EC2 Image Builder Notification"
+      TopicName: "EC2_Image_Builder_Notification"
+      Subscription:
+        - Endpoint:
+            Fn::GetAtt:
+            - UpdateSSMParameter
+            - Arn
+          Protocol: "lambda"
+    DependsOn: UpdateSSMParameter
+
+  AWSLambdaEc2IBExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AWS-Lambda-Ec2IB-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action: sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: AWSLambdaEc2IBPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ssm:PutParameter
+            - ssm:AddTagsToResource
+            - ssm:GetParameters
+            - ssm:StartAutomationExecution
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            - logs:CreateLogGroup
+            Resource: '*'
+            Effect: Allow
+
+  UpdateSSMParameter:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Description: Update SSM Parameter with the latest AMI
+      Handler: index.lambda_handler
+      Runtime: python3.7
+      FunctionName: UpdateSSMParameter
+      Code:
+        ZipFile: !Sub |
+          import json
+          import boto3
+          import logging
+          import os
+          import re
+          from datetime import datetime
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          ssm_client = boto3.client('ssm')
+
+          def lambda_handler(event, context):
+              logger.info('Printing event: {}'.format(event))
+              process_sns_event(event)
+              return None
+
+          def process_sns_event(event):
+              for record in (event['Records']):
+                  event_message = record['Sns']['Message']
+
+                  #convert the event message to json
+                  message_json = json.loads(event_message)
+
+                  #obtain the image state
+                  image_state = (message_json['state']['status'])
+              
+                  #update the SSM parameter if the image state is available
+                  if (image_state == 'AVAILABLE'):
+                      logger.info('Image is available')
+
+                      #obtain ami id
+                      ami = message_json['outputResources']['amis'][0]
+                      product = message_json['distributionConfiguration']['distributions'][0]['amiDistributionConfiguration']['amiTags']
+                      imagename = message_json['distributionConfiguration']['distributions'][0]['amiDistributionConfiguration']['name']
+                      recipe_name = message_json['name']
+                      buildVersion = message_json['buildVersion']
+                      productOSAndVersion = product['Platform']
+                      ssm_parameter_name = '/ec2-imagebuilder/' + recipe_name + '/latest'
+                      ssm_parameter_poslatest = '/ec2-imagebuilder/' + productOSAndVersion + '/latest'
+                      ssm_parameter_posversion = '/ec2-imagebuilder/' + recipe_name + '/productOSAndVersion'
+                      ssm_parameter_pname = '/ec2-imagebuilder/' + recipe_name + '/productName'
+                      ssm_parameter_bversion = '/ec2-imagebuilder/' + recipe_name + '/buildVersion'
+                      matchdate = re.search(r'\d{4}-\d{2}-\d{2}\D{1}\d{2}-\d{2}-\d{2}', imagename)
+                      imagedate = (matchdate.group())
+                      logger.info('AMI ID: {}'.format(ami['image']))
+
+                      #update SSM parameter
+                      response = ssm_client.put_parameter(
+                          Name=ssm_parameter_name,
+                          Description='Latest AMI ID',
+                          Value=ami['image'],
+                          Type='String',
+                          Overwrite=True,
+                          Tier='Standard'
+                          )
+                      logger.info('SSM Updated: {}'.format(response))
+
+                      response_pos_latest = ssm_client.put_parameter(
+                          Name=ssm_parameter_name,
+                          Description='Latest AMI ID',
+                          Value=ami['image'],
+                          Type='String',
+                          Overwrite=True,
+                          Tier='Standard'
+                          )
+                      logger.info('SSM Updated: {}'.format(response))
+
+                      response_spov = ssm_client.put_parameter(
+                          Name=ssm_parameter_posversion,
+                          Description='ProductOSAndVersion',
+                          Value=product['Platform'],
+                          Type='String',
+                          Overwrite=True,
+                          Tier='Standard'
+                          )
+                      logger.info('SSM Updated: {}'.format(response_spov))
+
+                      response_pname = ssm_client.put_parameter(
+                          Name=ssm_parameter_pname,
+                          Description='ProductName',
+                          Value=str(product['Platform']) + 'AMI' + '-' + str(buildVersion),
+                          Type='String',
+                          Overwrite=True,
+                          Tier='Standard'
+                          )
+                      logger.info('SSM Updated: {}'.format(response_pname))
+
+                      response_bversion = ssm_client.put_parameter(
+                          Name=ssm_parameter_bversion,
+                          Description='BuildVersion',
+                          Value=str(buildVersion),
+                          Type='String',
+                          Overwrite=True,
+                          Tier='Standard'
+                          )
+                      logger.info('SSM Updated: {}'.format(response_bversion))
+
+                      #add tags to the SSM parameter
+                      ssm_client.add_tags_to_resource(
+                      ResourceType='Parameter',
+                      ResourceId=ssm_parameter_name,
+                      Tags=[
+                          {
+                              'Key': 'Source',
+                              'Value': 'EC2ImageBuilder'
+                          },
+                          {
+                              'Key': 'AMI_REGION',
+                              'Value': ami['region']
+                          },
+                          {
+                              'Key': 'AMI_ID',
+                              'Value': ami['image']
+                          },
+                          {
+                              'Key': 'AMI_NAME',
+                              'Value': ami['name']
+                          },
+                          {
+                              'Key': 'RECIPE_NAME',
+                              'Value': recipe_name
+                          },
+                          {
+                              'Key': 'SOURCE_PIPELINE_ARN',
+                              'Value': message_json['sourcePipelineArn']
+                          },
+                      ],
+                  )
+            
+                      MasterAccountID=os.environ['MasterAccountID']
+                      AutomationDocument=os.environ['AutomationDocument']
+                      
+                      ssmresponse = ssm_client.start_automation_execution(
+                      DocumentName=f'{AutomationDocument}',
+                      
+                      Parameters={
+                          'ImageAmiId': [str(ami['image'])],
+                          'productName': [str(product['Platform']) + 'AMI' + '-' + str(buildVersion)],
+                          'AMIVersion': [str(buildVersion)],
+                          'productOSAndVersion': [str(product['Platform'])],
+                          'ImageDate': [str(imagedate)]
+                      }
+                  )
+                  logger.info('Triggered Automation Document: {}'.format(ssmresponse))
+              # end of Lambda function
+      Environment: 
+        Variables:
+            MasterAccountID: !Sub ${AWS::AccountId}
+            AutomationDocument: Eiger-GoldenAMIAutomationDoc
+      MemorySize: 256
+      Timeout: 300
+      Role: !GetAtt AWSLambdaEc2IBExecutionRole.Arn
+    DependsOn: AWSLambdaEc2IBExecutionRole
+
+  TriggerCopyandShareAMI:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Description: Trigger CopyandShareAMI Automation SSM Document
+      Handler: index.lambda_handler
+      Runtime: python3.7
+      FunctionName: TriggerCopyandShareAMI
+      Code:
+        ZipFile: !Sub |
+          import json
+          import boto3
+          import logging
+          import os
+          import re
+          from datetime import datetime
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          ssm_client = boto3.client('ssm')
+
+          def lambda_handler(event, context):
+              logger.info('Printing event: {}'.format(event))
+              approvalStatus = event['Status']
+
+              amiID = event['amiID']
+              if ( approvalStatus == 'approved'):
+                  logger.info('amiID: {} is Approved and ready to be Promoted.'.format(amiID))
+                  MasterAccountID=os.environ['MasterAccountID']
+                  AutomationDocument=os.environ['AutomationDocument']
+                  ssmresponse = ssm_client.start_automation_execution(
+                  DocumentName=f'{AutomationDocument}',
+                  Parameters={
+                          'productName': [str(event['productName'])],
+                          'buildVersion': [str(event['buildVersion'])],
+                          'productOSAndVersion': [str(event['productOSAndVersion'])]
+                      }
+                  )
+                  logger.info('Triggered Automation Document: {}'.format(ssmresponse))
+              # end of Lambda function
+      Environment: 
+        Variables:
+            MasterAccountID: !Sub ${AWS::AccountId}
+            AutomationDocument: Eiger-GoldenAMICopyAndShare
+      MemorySize: 256
+      Timeout: 300
+      Role: !GetAtt AWSLambdaEc2IBExecutionRole.Arn
+    DependsOn: AWSLambdaEc2IBExecutionRole
+
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UpdateSSMParameter
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref ImageBuilderSNSTopic
+    DependsOn: UpdateSSMParameter
+
+Outputs:
+  LambdaArn:
+    Description: Lambda Function Arn
+    Value: !GetAtt UpdateSSMParameter.Arn
+    Export:
+      Name: image-builder-lambda-update-ssm-arn
+
+  SNSTopicArn:
+    Description: SNS Topic Arn
+    Value: !Ref ImageBuilderSNSTopic
+    Export:
+      Name: image-builder-lambda-sns-arn

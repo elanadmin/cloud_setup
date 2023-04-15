@@ -1,0 +1,247 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation StackSet template to create a scheduled multi-account and multi-Region patching operation using Amazon EventBridge, AWS Lambda, and AWS Systems Manager Automation.
+
+Parameters:
+  PatchQuarter:
+    Type: String
+    Description: >-
+      Approval Until Date for Quarter in YYYY-MM-DD Format.
+    Default: 'Q1'
+    AllowedPattern: "Q(\\d{1,4})"
+    AllowedValues:
+    - Q1
+    - Q2
+    - Q3
+    - Q4
+
+  PatchQuarterYear:
+    Type: String
+    Description: >-
+      Patch Quarter Year in YYYY Format.
+    Default: '2022'
+    AllowedPattern: "(\\d{1,4})"
+
+Mappings:
+  PatchQuarterMap:
+    Q1:
+      PatchQuarterDate: 12-12
+    Q2:
+      PatchQuarterDate: 03-12
+    Q3:
+      PatchQuarterDate: 06-12
+    Q4:
+      PatchQuarterDate: 09-12
+   
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal: {Service: [lambda.amazonaws.com]}
+          Action: ['sts:AssumeRole']
+      Path: "/"
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+  
+  QYCFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: !Sub |
+          var response = require('cfn-response');
+          exports.handler = function(event, context) {
+            var PatchQuarter = event.ResourceProperties.Op3;
+            console.log('PatchQuarter:', PatchQuarter);
+            if (PatchQuarter == "Q1") {
+              var result = parseInt(event.ResourceProperties.Op1) - parseInt(event.ResourceProperties.Op2);
+            } else {
+              var result = parseInt(event.ResourceProperties.Op1);
+            }
+            response.send(event, context, response.SUCCESS, {Value: result});
+          };
+      Runtime: nodejs12.x
+
+  QYCTest:
+    Type: Custom::SubFunc
+    Properties:
+      ServiceToken: !GetAtt QYCFunction.Arn
+      Op1: !Ref PatchQuarterYear
+      Op2: 1
+      Op3: !Ref PatchQuarter
+  
+  PatchQuarterCutOffDate:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: PatchQuarterCutOffDate
+      Type: String
+      Value: !Join [ '-', [!GetAtt "QYCTest.Value", !FindInMap [PatchQuarterMap, !Ref "PatchQuarter", PatchQuarterDate]] ]
+      Description: SSM Parameter for PatchQuarterCutOffDate
+
+  PatchQuarterID:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: PatchQuarterID
+      Type: String
+      Value: !Sub ${PatchQuarterYear}${PatchQuarter}
+      Description: SSM Parameter for PatchQuarter
+
+  AMZNCustomPatchBaseline:
+    Type: AWS::SSM::PatchBaseline
+    Properties:
+      Name: !Sub Eiger-${PatchQuarterYear}-${PatchQuarter}-AMZN2-PatchBaseLine
+      Description: Baseline Containing All Updates Approved For Amazon Linux Instances.
+      OperatingSystem: AMAZON_LINUX_2
+      PatchGroups:
+      - !Sub ${PatchQuarterYear}${PatchQuarter}
+      ApprovalRules:
+        PatchRules:
+          - ApproveUntilDate: !Join [ '-', [!GetAtt "QYCTest.Value", !FindInMap [PatchQuarterMap, !Ref "PatchQuarter", PatchQuarterDate]] ]
+            PatchFilterGroup:
+              PatchFilters:
+                - Key: "PRODUCT"
+                  Values:
+                    - "*"
+                - Key: "CLASSIFICATION"
+                  Values:
+                    - "Security"
+                    - "Bugfix"
+                    - "Enhancement"
+                - Key: "SEVERITY"
+                  Values:
+                  - "*"
+            EnableNonSecurity: false
+
+  RHELCustomPatchBaseline:
+    Type: AWS::SSM::PatchBaseline
+    Properties:
+      Name: !Sub Eiger-${PatchQuarterYear}-${PatchQuarter}-RHEL8-PatchBaseLine
+      Description: Baseline Containing All Updates Approved For RHEL Linux Instances.
+      OperatingSystem: REDHAT_ENTERPRISE_LINUX
+      PatchGroups:
+      - !Sub ${PatchQuarterYear}${PatchQuarter}
+      ApprovalRules:
+        PatchRules:
+          - ApproveUntilDate: !Join [ '-', [!GetAtt "QYCTest.Value", !FindInMap [PatchQuarterMap, !Ref "PatchQuarter", PatchQuarterDate]] ]
+            PatchFilterGroup:
+              PatchFilters:
+                - Key: "PRODUCT"
+                  Values:
+                    - "*"
+                - Key: "CLASSIFICATION"
+                  Values:
+                    - "Security"
+                    - "Bugfix"
+                    - "Enhancement"
+                - Key: "SEVERITY"
+                  Values:
+                  - "*"
+            EnableNonSecurity: false
+
+  UBUNTUCustomPatchBaseline:
+    Type: AWS::SSM::PatchBaseline
+    Properties:
+      Name: !Sub Eiger-${PatchQuarterYear}-${PatchQuarter}-Ubuntu-PatchBaseLine
+      Description: Baseline Containing All Updates Approved For Ubuntu Linux Instances.
+      OperatingSystem: UBUNTU
+      PatchGroups:
+      - !Sub ${PatchQuarterYear}${PatchQuarter}
+      ApprovalRules:
+        PatchRules:
+          - ApproveUntilDate: !Join [ '-', [!GetAtt "QYCTest.Value", !FindInMap [PatchQuarterMap, !Ref "PatchQuarter", PatchQuarterDate]] ]
+            PatchFilterGroup:
+              PatchFilters:
+                - Key: "PRODUCT"
+                  Values:
+                    - "*"
+                - Key: "PRIORITY"
+                  Values:
+                  - "Required"
+                  - "Important"
+                  - "Standard"
+                  - "Optional"
+                  - "Extra"
+                - Key: "SECTION"
+                  Values:
+                    - "*"
+            EnableNonSecurity: false
+
+  AMZNDefaultBaselineCustomResource:
+    Type: "Custom::DefaultPatchBaseline"
+    Properties:
+      PatchBaselinId:
+        Ref: "AMZNCustomPatchBaseline"
+      OperatingSystem: "AMAZON_LINUX_2"
+      ServiceToken:
+        Fn::GetAtt:
+          - "DefaultBaselineLambda"
+          - "Arn"
+  
+  RHELDefaultBaselineCustomResource:
+    Type: "Custom::DefaultPatchBaseline"
+    Properties:
+      PatchBaselinId:
+        Ref: "RHELCustomPatchBaseline"
+      OperatingSystem: "REDHAT_ENTERPRISE_LINUX"
+      ServiceToken:
+        Fn::GetAtt:
+          - "DefaultBaselineLambda"
+          - "Arn"
+
+  UBUNTUDefaultBaselineCustomResource:
+    Type: "Custom::DefaultPatchBaseline"
+    Properties:
+      PatchBaselinId:
+        Ref: "UBUNTUCustomPatchBaseline"
+      OperatingSystem: "UBUNTU"
+      ServiceToken:
+        Fn::GetAtt:
+          - "DefaultBaselineLambda"
+          - "Arn"
+
+  CustomPatchBaseLineLambdaIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: CustomPatchBaseLineLambdaIamRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns: []
+      Policies:
+        - PolicyName: "ssm-patch-baseline"
+          PolicyDocument:
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "ssm:DescribePatchBaselines"
+                  - "ssm:RegisterDefaultPatchBaseline"
+                Resource: "*"
+
+  DefaultBaselineLambda:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: "'use strict';\nconst AWS = require('aws-sdk');\nconst response = require('./cfn-response');\nconst ssm = new AWS.SSM();\n\nexports.handler = (event, context, cb) => {\n  console.log('Invoke:', JSON.stringify(event));\n  const done = (err, data) => {\n    if (err) {\n      console.log('Error: ', err);\n      response.send(event, context, response.FAILED, {}, 'CustomResourcePhysicalID');\n    } else {\n      console.log('Data: ', data)\n      response.send(event, context, response.SUCCESS, {}, 'CustomResourcePhysicalID');\n    }\n  };\n\n  if (event.RequestType === 'Create' || event.RequestType === 'Update') {\n    ssm.registerDefaultPatchBaseline({\n        BaselineId: event.ResourceProperties.PatchBaselinId\n    }, done)\n\n  }\n  else if (event.RequestType === 'Delete'){\n    // on delete, the patch baseline is set to the default AWS patch baseline (For windows, there are three default patch baselines, the 'AWS-DefaultPatchBaseline' is selected)\n    ssm.describePatchBaselines({\n        Filters: [{Key:'OWNER', Values:['AWS']}]\n    }, function(err,data){\n        if (err) done(err,data)\n        else {\n            const defaultPatchBaselines = data.BaselineIdentities.filter((baseline) => baseline.OperatingSystem === event.ResourceProperties.OperatingSystem)\n            \n            \n            \n            ssm.registerDefaultPatchBaseline({\n                BaselineId: (event.ResourceProperties.OperatingSystem === 'WINDOWS')\n                                ? defaultPatchBaselines.filter((baseline) => baseline.BaselineName === 'AWS-DefaultPatchBaseline')[0].BaselineId\n                                : defaultPatchBaselines[0].BaselineId\n            }, done)\n            \n        }\n    })\n  }\n};\n"
+      Handler: "index.handler"
+      MemorySize: 128
+      Role:
+        Fn::GetAtt:
+          - "CustomPatchBaseLineLambdaIamRole"
+          - "Arn"
+      Runtime: "nodejs16.x"
+      Timeout: 120
+  
+Outputs:
+  QYCResult:
+    Description: Result
+    Value: !GetAtt QYCTest.Value

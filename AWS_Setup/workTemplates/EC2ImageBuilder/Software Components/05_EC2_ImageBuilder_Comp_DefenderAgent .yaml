@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Metadata:
+    Generator: "former2"
+Description: "EC2 ImageBuilder Component for MDE(Defender) Agent"
+
+Parameters: 
+  s3downloadbucket:
+    Description: "Name of the S3 Bucket to download data from"
+    Type: String
+    Default: "ec2imagebuilder-eiger-infra"
+
+Resources:
+    ImageBuilderComponent:
+        Type: "AWS::ImageBuilder::Component"
+        Properties:
+            Name: "mde-cloud-agent"
+            Description: "Install MDE(Defender) Cloud Agent."
+            Version: "101.60.93"
+            Platform: "Linux"
+            Tags:
+              Purpose: "GoldenImage"
+              Platform: "Linux"
+            Data: |
+              name: mde-cloud-agent
+              description: Install MDE(Defender) Cloud Agent.
+              schemaVersion: 1.0
+
+              parameters:
+                - s3_download_bucket:
+                    type: string
+                    default: 'ec2imagebuilder-eiger-infra'
+                    description: S3 Download Bucket.
+
+              phases:
+                - name: build
+                  steps:
+                    - name: Fail
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - echo 1
+                          
+                    - name: OperatingSystemRelease
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            FILE=/etc/os-release
+                            if [ -e $FILE ]; then
+                              . $FILE
+                              MAJOR_VERSION=$(echo $VERSION_ID | grep -o ^[0-9])
+                              echo "$ID${MAJOR_VERSION:+${MAJOR_VERSION}}"
+                            else
+                              echo "The file $FILE does not exist. Failing build."
+                              exit {{ build.Fail.outputs.stdout }}
+                            fi
+                  
+                    - name: OperatingSystemArchitecture
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            ARCH=$(uname -m)
+                            if [ `echo $ARCH | grep -Ev '^(aarch64|x86_64)'` ]; then
+                              echo "The '$ARCH' architecture is not supported. Failing build."
+                              exit {{ build.Fail.outputs.stdout }}
+                            fi
+                            echo $ARCH
+                            
+                    - name: Check_Install_Kernel_KernelHeaders
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            kerneldevelver=$(yum list kernel-devel | grep kernel-devel | head -1 | awk '{print $2}')
+
+                            if [[ ! $(rpm -qa | grep kernel-${kerneldevelver}) ]];then
+                              echo -e "\nInstalling kernel and kernel-devel with version ${kerneldevelver}:\n"
+                              yum install -y kernel-${kerneldevelver} kernel-devel-${kerneldevelver}
+                              touch /tmp/reboot_required
+                            elif [[ ! $(rpm -qa | grep kernel-devel-${kerneldevelver}) ]];then
+                              echo -e "\nInstalling kernel-devel with version ${kerneldevelver}:\n"
+                              yum install -y kernel-devel-${kerneldevelver}
+                            else
+                              echo -e "\nBoth kernel and kernel-devel are already at latest version ${kerneldevelver}\n"
+                            fi
+
+                    - name: Reboot_If_Needed
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            if [[ -f "/tmp/reboot_required" ]];then
+                              echo -e "\nReboot Required, Initiating Reboot.\n"
+                              rm /tmp/reboot_required
+                              exit 194
+                            else
+                              echo -e "\nReboot Not Required.\n"
+                            fi
+
+                    - name: Install_mde-cloud-agent
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            os_release={{ build.OperatingSystemRelease.outputs.stdout }}
+                            cd $(pwd)/
+                            mkdir -p /var/tmp/defender
+                            aws s3 sync s3://{{s3_download_bucket}}/Software/common/Defender/ /var/tmp/defender
+                            bash /var/tmp/defender/run_installer.sh /var/tmp/defender
+                            mkdir -p /var/tmp/mdatp
+                            aws s3 sync s3://{{s3_download_bucket}}/Config/mdatp/ /var/tmp/mdatp/
+                            for excl in file folder process
+                            do
+                              if [[ $excl = file ]] || [[ $excl = folder ]];then
+                                arg="add --path"
+                              elif [[ $excl = process ]];then
+                                arg="add --name"
+                              fi
+                              for target in $(cat /var/tmp/mdatp/exclusions/$excl)
+                              do
+                                mdatp exclusion $excl $arg $target
+                              done
+                            done
+                            mdatp exclusion list
+                            echo -e "\nCreating mdatp extended config...\n"
+                            mkdir -p /etc/systemd/system/mdatp.service.d
+                            mv /var/tmp/mdatp/mdatp.conf /etc/systemd/system/mdatp.service.d/
+                            systemctl daemon-reload
+                            sudo systemctl stop mdatp
+                            sudo systemctl enable mdatp
+                        
+                - name: validate
+                  steps:
+                    - name: Validate_qualys-cloud-agent_Install
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - systemctl status mdatp.service --no-pager && echo -e "\nmdatp Service Running, As Not Expected.\n" || echo -e "\nmdatp Service Not Running, As Expected.\n"

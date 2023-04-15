@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Metadata:
+    Generator: "former2"
+Description: "EC2 ImageBuilder Component for Miscellanous PreRun Scripts"
+
+Parameters: 
+  s3downloadbucket:
+    Description: "Name of the S3 Bucket to download data from"
+    Type: String
+    Default: "ec2imagebuilder-eiger-infra"
+
+Resources:
+    ImageBuilderComponent:
+        Type: "AWS::ImageBuilder::Component"
+        Properties:
+            Name: "misc-prerun-scripts"
+            Description: "Run Miscellaneous PreRun Scripts."
+            Version: "1.0.0"
+            Platform: "Linux"
+            Tags:
+              Purpose: "GoldenImage"
+              Platform: "Linux"
+            Data: |
+              name: misc-prerun-scripts
+              description: Run Miscellaneous PreRun Scripts.
+              schemaVersion: 1.0
+
+              parameters:
+                - s3_download_bucket:
+                    type: string
+                    default: 'ec2imagebuilder-eiger-infra'
+                    description: S3 Bucket to Download Data From.
+
+              phases:
+                - name: build
+                  steps:
+                    - name: Fail
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - echo 1
+                          
+                    - name: OperatingSystemRelease
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            FILE=/etc/os-release
+                            if [ -e $FILE ]; then
+                              . $FILE
+                              MAJOR_VERSION=$(echo $VERSION_ID | grep -o ^[0-9])
+                              echo "$ID${MAJOR_VERSION:+${MAJOR_VERSION}}"
+                            else
+                              echo "The file $FILE does not exist. Failing build."
+                              exit {{ build.Fail.outputs.stdout }}
+                            fi
+                  
+                    - name: OperatingSystemArchitecture
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            ARCH=$(uname -m)
+                            if [ `echo $ARCH | grep -Ev '^(aarch64|x86_64)'` ]; then
+                              echo "The '$ARCH' architecture is not supported. Failing build."
+                              exit {{ build.Fail.outputs.stdout }}
+                            fi
+                            echo $ARCH
+                            
+                    - name: Run_LVM_Disk
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            #!/bin/bash
+
+                            lvmfs() {
+                              if [[ ! $(df -h $6|grep -w $6) ]];then
+                                echo -e "\nCreating Vol $3 with Size $1 ...\n"
+                                lvcreate -L +$1 /dev/$2 -n $3
+                                lvs
+                                mkfs -t $4 -f -L $5 /dev/$2/$3
+                                mkdir -p /mnt/$5
+                                mount /dev/$2/$3 /mnt/$5
+
+                                if [[ $(df -h /mnt/$5|grep -w /mnt/$5) ]];then
+                                  echo -e "\nCopying Vol $3 Data to Filesystem..."
+                                  rsync -auzH $6/ /mnt/$5
+                                  umount /mnt/$5
+                                  cp -rp /etc/fstab /var/tmp/fstab
+                                  echo -e "\nCreating fstab entry for $6..."
+                                  echo -e "LABEL=$5\t$6\t$4\t$7\t0 2" >> /etc/fstab
+
+                                  if [[ $(mount $6) ]];then
+                                    cp -rp /var/tmp/fstab /etc/fstab
+                                    echo -e "\n$6 failed to mount ...\n"
+                                    exit 1
+                                  else
+                                    df -h $6
+                                  fi
+
+                                fi
+                              else
+                                echo -e "$3 already mounted at $6 ...\n"
+                              fi
+                              grep -w $6 /etc/fstab
+                            }
+
+                            if [[ $(fdisk -l /dev/xvdf 2>/dev/null) ]];then
+                              yum install -y lvm2 rsync net-tools
+                              pvcreate /dev/xvdf
+                              pvs
+                              vgcreate vg_01 /dev/xvdf
+                              vgs
+                              lvmfs 4G vg_01 home_vol xfs home /home nodev
+                              lvmfs 5G vg_01 var_vol xfs var /var defaults
+                              lvmfs 5G vg_01 var_log_vol xfs varlog /var/log defaults
+                              lvmfs 5G vg_01 var_log_audit_vol xfs varlogaudit /var/log/audit defaults
+                              lvmfs 5G vg_01 var_tmp xfs vartmp /var/tmp defaults
+                            fi
+                    
+                    - name: Enable_SELinux
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            #!/bin/bash
+                            if [[ $(which sestatus) ]];then
+                              if [[ $(sestatus | grep "SELinux status" | grep disabled) ]];then
+                                echo -e "\nSELinux Needs to be Enabled\n"
+                                sed -i "s/SELINUX=disabled/SELINUX=enforcing/g" /etc/selinux/config
+                                touch /tmp/reboot_required
+                              fi
+                              touch /.autorelabel
+                            fi
+
+                    - name: Reboot_If_Needed
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            if [[ -f "/tmp/reboot_required" ]];then
+                              echo -e "\nReboot Required, Initiating Reboot.\n"
+                              rm /tmp/reboot_required
+                              exit 194
+                            else
+                              echo -e "\nReboot Not Required.\n"
+                            fi
+
+                - name: validate
+                  steps:
+                    - name: Validate_Pre_Miscellaneous_Steps
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            df -h
+                            cat /etc/fstab

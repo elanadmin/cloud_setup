@@ -1,0 +1,177 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Resources for Lambda function to trigger SSM Automation and Update SSM Parameter.
+
+Resources:
+  ImageBuilderSNSTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      DisplayName: "EC2 Image Builder Notification"
+      TopicName: "EC2_Image_Builder_Notification"
+      Subscription:
+        - Endpoint:
+            Fn::GetAtt:
+            - UpdateSSMParameter
+            - Arn
+          Protocol: "lambda"
+    DependsOn: UpdateSSMParameter
+
+  AWSLambdaEc2IBExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AWS-Lambda-Ec2IB-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action: sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: AWSLambdaEc2IBPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ssm:PutParameter
+            - ssm:AddTagsToResource
+            - ssm:GetParameters
+            - ssm:StartAutomationExecution
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            - logs:CreateLogGroup
+            Resource: '*'
+            Effect: Allow
+
+  UpdateSSMParameter:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Description: Update SSM Parameter with the latest AMI
+      Handler: index.lambda_handler
+      Runtime: python3.7
+      FunctionName: UpdateSSMParameter
+      Code:
+        ZipFile: !Sub |
+          import json
+          import boto3
+          import logging
+          import os
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          ssm_client = boto3.client('ssm')
+
+          def lambda_handler(event, context):
+              logger.info('Printing event: {}'.format(event))
+              process_sns_event(event)
+              return None
+
+          def process_sns_event(event):
+              for record in (event['Records']):
+                  event_message = record['Sns']['Message']
+
+                  #convert the event message to json
+                  message_json = json.loads(event_message)
+
+                  #obtain the image state
+                  image_state = (message_json['state']['status'])
+              
+                  #update the SSM parameter if the image state is available
+                  if (image_state == 'AVAILABLE'):
+                      logger.info('Image is available')
+
+                      #obtain ami id
+                      ami = message_json['outputResources']['amis'][0]
+                      recipe_name = message_json['name']
+                      ssm_parameter_name = '/ec2-imagebuilder/' + recipe_name + '/latest'
+                      logger.info('AMI ID: {}'.format(ami['image']))
+
+                      #update SSM parameter
+                      response = ssm_client.put_parameter(
+                          Name=ssm_parameter_name,
+                          Description='Latest AMI ID',
+                          Value=ami['image'],
+                          Type='String',
+                          Overwrite=True,
+                          Tier='Standard'
+                          )
+                      logger.info('SSM Updated: {}'.format(response))
+
+                      #add tags to the SSM parameter
+                      ssm_client.add_tags_to_resource(
+                      ResourceType='Parameter',
+                      ResourceId=ssm_parameter_name,
+                      Tags=[
+                          {
+                              'Key': 'Source',
+                              'Value': 'EC2 Image Builder'
+                          },
+                          {
+                              'Key': 'AMI_REGION',
+                              'Value': ami['region']
+                          },
+                          {
+                              'Key': 'AMI_ID',
+                              'Value': ami['image']
+                          },
+                          {
+                              'Key': 'AMI_NAME',
+                              'Value': ami['name']
+                          },
+                          {
+                              'Key': 'RECIPE_NAME',
+                              'Value': recipe_name
+                          },
+                          {
+                              'Key': 'SOURCE_PIPELINE_ARN',
+                              'Value': message_json['sourcePipelineArn']
+                          },
+                      ],
+                  )
+            
+                      MasterAccountID=os.environ['MasterAccountID']
+                      AutomationDocument=os.environ['AutomationDocument']
+                      
+                      ssmresponse = ssm_client.start_automation_execution(
+                      DocumentName=f'{AutomationDocument}',
+                      
+                      Parameters={
+                          'ImageAmiId': [str(ami['image'])]
+                      }
+                  )
+                  logger.info('Triggered Automation Document: {}'.format(ssmresponse))
+
+              # end of Lambda function
+      Environment: 
+        Variables:
+            MasterAccountID: !Sub ${AWS::AccountId}
+            AutomationDocument: Eiger-GoldenAMIAutomationDoc
+      MemorySize: 256
+      Timeout: 300
+      Role: !GetAtt AWSLambdaEc2IBExecutionRole.Arn
+    DependsOn: AWSLambdaEc2IBExecutionRole
+
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UpdateSSMParameter
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref ImageBuilderSNSTopic
+    DependsOn: UpdateSSMParameter
+
+Outputs:
+  LambdaArn:
+    Description: Lambda Function Arn
+    Value: !GetAtt UpdateSSMParameter.Arn
+    Export:
+      Name: image-builder-lambda-update-ssm-arn
+
+  SNSTopicArn:
+    Description: SNS Topic Arn
+    Value: !Ref ImageBuilderSNSTopic
+    Export:
+      Name: image-builder-lambda-sns-arn

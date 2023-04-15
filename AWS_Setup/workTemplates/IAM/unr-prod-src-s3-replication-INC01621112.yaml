@@ -1,0 +1,162 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "AWS CloudFormation template for S3 Replication IAM Roles and Policies in Source unr-prod Account",
+    "Parameters": {
+        "S3ReplicationSrcBucket": {
+            "Description": "S3 Replication Source Bucket",
+            "Type": "String",
+            "Default": "unvr-s3-tst-consumption"
+        },
+        "S3ReplicationDstBucket": {
+            "Description": "S3 Replication Destination Bucket",
+            "Type": "String",
+            "Default": "unso-s3-tst-di-consumption"
+        },
+        "S3ReplicationRole": {
+            "Description": "IAM RoleName for S3 Replication Role with Customer Managed Policies",
+            "Type": "String",
+            "Default": "S3-Replication-Batch-Ops-Role-Consumption"
+        },
+        "S3ReplicationPolicy": {
+            "Description": "IAM PolicyName for S3 Replication Role",
+            "Type": "String",
+            "Default": "S3-Replication-Batch-Ops-Policy-Consumption"
+        },
+    },
+    "Resources": {
+        "S3RepRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": { "Ref" : "S3ReplicationRole" },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "s3.amazonaws.com",
+                                    "batchoperations.s3.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": { "Ref" : "S3ReplicationPolicy" },
+                        "PolicyDocument": {
+                           "Version": "2012-10-17",
+                           "Statement": [
+                               {
+                                   "Sid": "SrcS3Policy",
+                                   "Effect": "Allow",
+                                   "Action": [
+                                       "s3:PutObject",
+                                       "s3:GetReplicationConfiguration",
+                                       "s3:PutInventoryConfiguration",
+                                       "s3:ListBucket",
+                                       "s3:GetObject",
+                                       "s3:GetObjectVersion",
+                                       "s3:GetObjectAcl",
+                                       "s3:GetObjectTagging",
+                                       "s3:GetObjectVersionForReplication",
+                                       "s3:GetObjectVersionAcl",
+                                       "s3:GetObjectVersionTagging",
+                                       "s3:InitiateReplication",
+                                       "s3:ReplicateObject",
+                                       "s3:ReplicateTags",
+                                       "s3:AbortMultipartUpload"
+                                    ],
+                                    "Resource": [
+                                        { 
+                                          "Fn::Sub": "arn:aws:s3:::${S3ReplicationSrcBucket}",
+                                          "Fn::Sub": "arn:aws:s3:::${S3ReplicationSrcBucket}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "DstS3Policy",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:PutObjectAcl",
+                                        "s3:PutObjectVersionAcl",
+                                        "s3:PutObjectTagging",
+                                        "s3:PutObjectVersionTagging",
+                                        "s3:DeleteObjectTagging",
+                                        "s3:DeleteObjectVersionTagging",
+                                        "s3:ReplicateDelete",
+                                        "s3:ReplicateObject",
+                                        "s3:List*",
+                                        "s3:GetBucketVersioning",
+                                        "s3:PutBucketVersioning",
+                                        "s3:GetBucketObjectLockConfiguration",
+                                        "s3:PutObjectRetention",
+                                        "s3:BypassGovernanceRetention",
+                                        "s3:PutObjectLegalHold",
+                                        "s3:RestoreObject"
+                                    ],
+                                    "Resource": [
+                                        { 
+                                          "Fn::Sub": "arn:aws:s3:::${S3ReplicationDstBucket}",
+                                          "Fn::Sub": "arn:aws:s3:::${S3ReplicationDstBucket}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Action": [
+                                        "kms:GetParametersForImport",
+                                        "kms:DescribeCustomKeyStores",
+                                        "kms:ListKeys",
+                                        "kms:GetPublicKey",
+                                        "kms:ListKeyPolicies",
+                                        "kms:ListRetirableGrants",
+                                        "kms:GetKeyRotationStatus",
+                                        "kms:ListAliases",
+                                        "kms:GetKeyPolicy",
+                                        "kms:DescribeKey",
+                                        "kms:ListResourceTags",
+                                        "kms:ListGrants"
+                                    ],
+                                    "Resource": "*",
+                                    "Effect": "Allow",
+                                    "Sid": "SrcKMSPolicy"
+                                },
+                                {
+                                    "Action": [
+                                        "kms:Encrypt",
+                                        "kms:Decrypt",
+                                        "kms:ReEncrypt*",
+                                        "kms:GenerateDataKey*",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": "*",
+                                    "Effect": "Allow",
+                                    "Sid": "DstKMSPolicy"
+                                },
+                                {
+                                    "Sid": "SrcIAMPolicy",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "iam:GetRole",
+                                        "iam:PassRole"
+                                    ],
+                                    "Resource": [
+                                        { 
+                                          "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/${S3ReplicationRole}" 
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}

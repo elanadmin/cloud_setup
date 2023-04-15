@@ -1,0 +1,31 @@
+{
+    "Version": "2012-10-17",
+    "Id": "S3ReplicationBucketPolicy",
+    "Statement": [
+        {
+            "Sid": "Set permissions for objects",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::558420267243:role/S3-Replication-Batch-Ops-Role"
+            },
+            "Action": [
+              "s3:ReplicateObject",
+              "s3:ReplicateDelete"
+            ],
+            "Resource": "arn:aws:s3:::unso-s3-dev-di-replicationtest/*"
+        },
+        {
+            "Sid": "Set permissions on bucket",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::558420267243:role/S3-Replication-Batch-Ops-Role"
+            },
+            "Action": [
+              "s3:List*",
+              "s3:GetBucketVersioning",
+              "s3:PutBucketVersioning"
+            ],
+            "Resource": "arn:aws:s3:::unso-s3-dev-di-replicationtest"
+        }
+    ]
+}

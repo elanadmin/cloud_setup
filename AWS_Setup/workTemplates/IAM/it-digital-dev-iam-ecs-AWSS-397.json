@@ -1,0 +1,409 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "AWS CloudFormation template for IAM Roles and Policies in IT-DIGITAL Solutions",
+    "Parameters": {
+        "EC2MSRole": {
+            "Description": "IAM RoleName for EC2 MicroService Role with Customer Managed Policies",
+            "Type": "String",
+            "Default": "digital-ec2-microservice-role-dev"
+        },
+        "EC2MSPolicy": {
+            "Description": "IAM PolicyName for EC2 MicroService Policy",
+            "Type": "String",
+            "Default": "digital-ec2-microservice-role-dev"
+        },
+        "EC2MSProfile": {
+            "Description": "Instance Profile for EC2 MicroService Role",
+            "Type": "String",
+            "Default": "digital-ec2-microservice-role-dev"
+        },
+        "ECSTaskExecRole": {
+            "Description": "IAM RoleName for ECS Task Execution Role with Customer Managed Policies",
+            "Type": "String",
+            "Default": "digital-ecs-task-execution-role-dev"
+        },
+        "ECSTaskExecPolicy": {
+            "Description": "IAM PolicyName for ECS Task Execution Policy",
+            "Type": "String",
+            "Default": "digital-ecs-task-execution-role-dev"
+        },
+        "ECSTaskRole": {
+            "Description": "IAM RoleName for ECS Task Role with Customer Managed Policies",
+            "Type": "String",
+            "Default": "digital-ecs-task-role-dev"
+        },
+        "ECSTaskPolicy": {
+            "Description": "IAM PolicyName for ECS Task Policy",
+            "Type": "String",
+            "Default": "digital-ecs-task-role-dev"
+        },
+        "MSCFRole": {
+            "Description": "IAM RoleName for MicroService CloudFormation Role with Customer Managed Policies",
+            "Type": "String",
+            "Default": "digital-microservices-cloudformation-dev"
+        },
+        "MSCFPolicy": {
+            "Description": "IAM PolicyName for MicroService CloudFormation Policy",
+            "Type": "String",
+            "Default": "digital-microservices-cloudformation-dev"
+        },
+        "MSLambdaRole": {
+            "Description": "IAM RoleName for MicroService Lambda Role with AWS Managed Policies",
+            "Type": "String",
+            "Default": "digital-microservice-lambda-role-dev"
+        }
+    },
+    "Resources": {
+        "digitalec2microservicerole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": { "Ref" : "EC2MSRole" },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": { "Ref" : "EC2MSPolicy" },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "apigateway:Get",
+                                        "apigateway:Put",
+                                        "cloudformation:*",
+                                        "cloudwatch:Describe*",
+                                        "cloudwatch:Get*",
+                                        "cloudwatch:List*",
+                                        "dynamodb:BatchGet*",
+                                        "dynamodb:Describe*",
+                                        "dynamodb:Get*",
+                                        "dynamodb:List*",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan",
+                                        "ec2:DescribeSecurityGroups",
+                                        "ec2:DescribeSubnets",
+                                        "ec2:DescribeVpcs",
+                                        "ecs:*",
+                                        "ecr:*",
+                                        "es:Describe*",
+                                        "es:ESHttp*",
+                                        "es:List*",
+                                        "glue:BatchGet*",
+                                        "glue:Get*",
+                                        "glue:List*",
+                                        "iam:ListRoles",
+                                        "lambda:List*",
+                                        "lambda:Get*",
+                                        "logs:*",
+                                        "rds:Describe*",
+                                        "rds:List*",
+                                        "rds:Download*",
+                                        "s3:Get*",
+                                        "s3:List*",
+                                        "secretsmanager:GetResourcePolicy",
+                                        "secretsmanager:GetSecretValue",
+                                        "secretsmanager:DescribeSecret",
+                                        "secretsmanager:ListSecretVersionIds",
+                                        "sns:*",
+                                        "sqs:*",
+                                        "sts:GetSessionToken",
+                                        "sts:AssumeRole",
+                                        "sts:GetAccessKeyInfo"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "DevelopFunctions",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "lambda:AddPermission",
+                                        "lambda:CreateAlias",
+                                        "lambda:CreateFunction",
+                                        "lambda:DeleteAlias",
+                                        "lambda:DeleteFunction",
+                                        "lambda:DeleteFunctionConcurrency",
+                                        "lambda:InvokeFunction",
+                                        "lambda:PublishVersion",
+                                        "lambda:PutFunctionConcurrency",
+                                        "lambda:RemovePermission",
+                                        "lambda:TagResource",
+                                        "lambda:UntagResource",
+                                        "lambda:UpdateAlias",
+                                        "lambda:UpdateFunctionCode",
+                                        "lambda:UpdateFunctionConfiguration"
+                                    ],
+                                    "Resource": [
+                                        "arn:aws:lambda:us-east-1:558420267243:function:digital-*"
+                                    ]
+                                },
+                                {
+                                    "Sid": "DevelopEventSourceMappings",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "lambda:DeleteEventSourceMapping",
+                                        "lambda:UpdateEventSourceMapping",
+                                        "lambda:CreateEventSourceMapping"
+                                    ],
+                                    "Resource": "*",
+                                    "Condition": {
+                                        "StringLike": {
+                                            "lambda:FunctionArn": "arn:aws:lambda:us-east-1:558420267243:function:digital-*"
+                                        }
+                                    }
+                                },
+                                {
+                                    "Sid": "PassExecutionRole",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "iam:ListRolePolicies",
+                                        "iam:ListAttachedRolePolicies",
+                                        "iam:GetRole",
+                                        "iam:GetRolePolicy",
+                                        "iam:PassRole",
+                                        "iam:SimulatePrincipalPolicy"
+                                    ],
+                                    "Resource": [
+                                        "arn:aws:iam::*:role/digital-microservice-lambda-role-dev",
+                                        "arn:aws:iam::*:role/digital-microservices-cloudformation-dev"
+                                    ]
+                                },
+                                {
+                                    "Sid": "ViewExecutionRolePolicies",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "iam:GetPolicy",
+                                        "iam:GetPolicyVersion"
+                                    ],
+                                    "Resource": "arn:aws:iam::aws:policy/*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "digitalec2microserviceinstanceprofile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": { "Ref" : "EC2MSProfile"},
+                "Path": "/",
+                "Roles": [ {
+                "Ref" : "EC2MSRole"
+                } ]
+            }
+        },
+        "digitalecstaskexecutionrole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": { "Ref" : "ECSTaskExecRole" },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+                ],
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ecs-tasks.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": { "Ref" : "ECSTaskExecPolicy" },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "secretsmanager:GetResourcePolicy",
+                                        "secretsmanager:GetSecretValue",
+                                        "secretsmanager:DescribeSecret",
+                                        "secretsmanager:ListSecretVersionIds",
+                                        "kms:Get*",
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "digitalecstaskrole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": { "Ref" : "ECSTaskRole" },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ecs-tasks.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": { "Ref" : "ECSTaskPolicy" },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "apigateway:Get",
+ 		                                "execute-api:Invoke",
+                                        "iam:ListRoles",
+                                        "lambda:List*",
+                                        "lambda:Get*",
+                                        "logs:*"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "digitalmicroservicescloudformationdev": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": { "Ref" : "MSCFRole" },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "cloudformation.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": { "Ref" : "MSCFPolicy" },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "apigateway:*",
+                                        "athena:*",
+                                        "autoscaling:*",
+                                        "cloudwatch:*",
+                                        "ec2:Describe*",
+                                        "ec2:*",
+                                        "elasticloadbalancing:*",
+                                        "events:*",
+                                        "firehose:*",
+                                        "glue:*",
+                                        "iam:GetPolicy",
+                                        "iam:GetPolicyVersion",
+                                        "iam:GetRole",
+                                        "iam:GetRolePolicy",
+                                        "iam:PassRole",
+                                        "iam:CreateServiceLinkedRole",
+                                        "iam:AttachRolePolicy",
+                                        "iam:PutRolePolicy",
+                                        "lambda:*",
+                                        "logs:*",
+                                        "s3:*",
+                                        "sqs:*",
+                                        "sns:*",
+                                        "schemas:*",
+                                        "states:*",
+                                        "secretsmanager:*",
+                                        "kinesis:*",
+                                        "kafka:*",
+                                        "kms:CreateGrant",
+                                        "kms:Decrypt",
+                                        "kms:Describe*",
+                                        "kms:Encrypt",
+                                        "kms:GenerateDataKey*",
+                                        "kms:Get*",
+                                        "kms:List*",
+                                        "kms:ReEncrypt*",
+                                        "kms:RetireGrant"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "digitalmicroservicelambdaroledev": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": { "Ref" : "MSLambdaRole" },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}

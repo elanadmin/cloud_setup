@@ -1,0 +1,697 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": " This cloudformation template creates resources required to set up a golden ami pipeline.(fdp-1o82smtoh)",
+
+    "Parameters": {
+
+      "qualysUsername": {
+             "Type": "String",
+             "Default": "qualys",
+             "Description": "Please enter the qualys Username for the Qualys agent which will be installed on your AMI for assessment. You get to override this later by editing the SSM parameter "
+           },
+      "qualysPassword": {
+              "Type": "String",
+              "Default": "qualys",
+              "NoEcho": "true",
+              "Description": "Please enter the qualys Password  for the Qualys agent which will be installed on your AMI for assessment. You get to override this later by editing the SSM parameter "
+            },
+      "qualysEc2Connector": {
+              "Type": "String",
+              "Default": "infrastructure-qualys-connector",
+              "Description": "Please enter the Qualys EC2 Connector Name for the AWS account that will be used for the Golden AMI Pipeline VPC "
+            },
+      "qualysEc2ConnectorId": {
+              "Type": "String",
+              "Default": "1234567890",
+              "Description": "Please enter the Qualys EC2 Connector ID for the AWS account that will be used for the Golden AMI Pipeline VPC "
+            },
+      "sshKeyName": {
+              "Type": "String",
+              "Default": "ec2imagebuilder",
+              "Description": "Please enter the SSH Key name that will be used for the Golden AMI Pipeline VPC and Qualys authentication record"
+            },
+      "qualysScanner": {
+                "Type": "String",
+                "Default": "Qualys-EC2-Scanner",
+                "Description": "Please enter the qualys Scanner Name for the Qualys agent which will be installed on your AMI for assessment. You get to override this later by editing the SSM parameter "
+              },
+      "qualysVmOptionId": {
+                 "Type": "String",
+                 "Default": "IDK",
+                 "Description": "Please enter the VM Option Profile ID used for running the Qualys Vulnerability assessment. You get to override this later by editing the SSM parameter "
+               },
+      "qualysRunPcScan": {
+                "Type": "String",
+                "Default": "YES",
+                "Description": "Please specify whether to run Qualys Compliance Scans in your Golden AMI Pipeline, if YES, then you must specify a PC Option ID. You get to override this later by editing the SSM parameter ",
+                "AllowedValues": [
+                  "YES",
+                  "NO"
+                ]
+               },
+      "qualysPCOptionId": {
+                "Type": "String",
+                "Default": "IDK",
+                "Description": "Please enter the Qualys PC OptionId for the Qualys agent which will be installed on your AMI for assessment. You get to override this later by editing the SSM parameter "
+               },
+      "qualysParentTagId": {
+                "Type": "String",
+                "Default": "IDK",
+                "Description": "Please enter the Qualys Parent Tag ID for the Golden AMI Pipeline Parent Tag in Qualys Asset View "
+               },
+      "qualysApiUrl": {
+               "Default": "https://qualysapi.qg3.apps.qualys.com",
+               "Description": "Your Qualys URL for accessing API",
+               "Type": "String"
+               },
+      "productName": {
+              "Type": "String",
+              "Default": "ProductName-ProductVersion",
+              "Description": "ProductName-ProductVersion combination of the product for which you intend to use the pipeline. You get to override this later when you trigger automation workflow. "
+              },
+      "productOSAndVersion": {
+            "Type": "String",
+            "Default": "OperatingSystemName-OperatingSystemVersion",
+            "Description": "Operating system name and OS version. You get to override this later when you trigger automation workflow."
+              },
+      "buildVersion": {
+            "Type": "String",
+            "Default": "1",
+            "Description": "Build-Version corresponding to your product. Note - This is just a default value, you get to override this later when you trigger automation workflow."
+          },
+
+      "ApproverUserIAMARN": {
+            "Type": "String",
+            "Default": "",
+            "Description": "IAM ARN of the Golden AMI approver. The approver must have AmazonSSMAutomationApproverAccess policy associated with it's IAM Profile ."
+        },
+
+      "EmailID": {
+            "Type": "String",
+            "Default": "tulasi.lakshmi@eigersolutions.com",
+            "AllowedPattern": "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)",
+            "Description": "Your email ID for receiving Qualys assessment results and golden AMI creation notification."
+           },
+
+      "instanceType":
+            {
+               "Type": "String",
+            "Default": "t2.micro",
+            "Description": "Specify the the InstanceType compatible with all your golden AMIs. This InstanceType will be used for launching continuous vulnerability assessment of golden AMIs."
+                },
+
+      "continuousInspectionFrequency": {
+            "Type": "String",
+            "Default": "rate(1 day)",
+            "Description": "Frequency for setting up continuous inspection of your AMIs. For syntax, check - https://docs.aws.amazon.com/lambda/latest/dg/tutorial-scheduled-events-schedule-expressions.html"
+            },
+
+      "MetadataJSON":{
+               "Type":"String",
+               "Default":"{\"054172767459\":\"us-east-1\"}",
+               "Description": "Metadata of accounts and regions for distributing the golden AMI."
+            },
+
+      "roleName":{
+               "Type":"String",
+               "Default":"goldenAMICrossAccountRole",
+               "Description": "Cross account role suffix for managing Golden AMI metadata Parameters in child account(s). This role needs to exist in each account specified in MetadataJSON parameter."
+            },
+
+      "qualysActivationID": {
+        "Default": "96f4172e-2d4e-462d-92a7-4e96a80f2c34",
+        "Description": "Your Qualys Cloud Agent Activation ID",
+        "Type": "String"
+        },
+
+      "qualysCustomerID": {
+        "Default": "e76a2f4e-d6af-e59c-82c6-a64e3ad45856",
+        "Description": "Your Qualys Cloud Agent Customer ID",
+        "Type": "String"
+        },
+
+      "qualysQcaLogLevel": {
+        "Type": "String",
+        "Default": "0",
+        "Description": "(Optional)  A higher value corresponds to more verbosity. Default is to report only errors (0) ",
+        "AllowedValues": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+          ]
+        }
+    },
+
+    "Resources": {
+
+      "QualysUsername": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysUsername",
+            "Type": "String",
+            "Value": {"Ref":"qualysUsername"},
+            "Description": "SSM Parameter for Qualys Username."
+         }
+      },
+
+      "QualysPassword": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysPassword",
+            "Type": "String",
+            "Value": {"Ref":"qualysPassword"},
+            "Description": "SSM Parameter for Qualys Password."
+         }
+
+      },
+
+      "QualysEc2Connector": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysEc2ConnectorName",
+            "Type": "String",
+            "Value": {"Ref":"qualysEc2Connector"},
+            "Description": "SSM Parameter for Qualys EC2 Connector."
+         }
+
+      },
+
+      "QualysEc2ConnectorId": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysEc2ConnectorId",
+            "Type": "String",
+            "Value": {"Ref":"qualysEc2ConnectorId"},
+            "Description": "SSM Parameter for Qualys EC2 Connector ID."
+         }
+
+      },
+
+      "SSHKeyName": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/SSHKeyName",
+            "Type": "String",
+            "Value": {"Ref":"sshKeyName"},
+            "Description": "SSM Parameter for Qualys EC2 Connector."
+         }
+
+      },
+
+      "QualysScannerName": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysScannerName",
+            "Type": "String",
+            "Value": {"Ref":"qualysScanner"},
+            "Description": "SSM Parameter for Qualys Scanner Name."
+         }
+      },
+
+      "QualysVmOptionId": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysVmOptionId",
+            "Type": "String",
+            "Value": {"Ref":"qualysVmOptionId"},
+            "Description": "SSM Parameter for Qualys Option ID."
+            }
+          },
+
+      "QualysRunPcScan": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysRunPcScan",
+            "Type": "String",
+            "Value": {"Ref":"qualysRunPcScan"},
+            "Description": "SSM Parameter for Qualys PC Enabled in GAP."
+            }
+          },
+
+      "QualysPCOptionId": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysPCOptionId",
+            "Type": "String",
+            "Value": {"Ref":"qualysPCOptionId"},
+            "Description": "SSM Parameter for Qualys PC Option ID."
+            }
+          },
+
+      "QualysParentTagId": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysParentTagId",
+            "Type": "String",
+            "Value": {"Ref":"qualysParentTagId"},
+            "Description": "SSM Parameter for Qualys Parent Tag ID"
+            }
+          },
+
+      "QualysQcaActivationID": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysQcaActivationID",
+            "Type": "String",
+            "Value": {"Ref":"qualysActivationID"},
+            "Description": "SSM Parameter for Qualys QCA Activation ID"
+            }
+          },
+
+      "QualysQcaCustomerID": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysQcaCustomerID",
+            "Type": "String",
+            "Value": {"Ref":"qualysCustomerID"},
+            "Description": "SSM Parameter for Qualys QCA Customer ID"
+            }
+          },
+
+      "QualysQcaLogLevel": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysQcaLogLevel",
+            "Type": "String",
+            "Value": {"Ref":"qualysQcaLogLevel"},
+            "Description": "(Optional)  A higher value corresponds to more verbosity. Default is to report only errors (0) "
+            }
+          },
+
+      "secGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+              "GroupDescription": "Qualys AutoScan SecurityGroup",
+              "SecurityGroupIngress" : []
+            }
+          },
+
+       "ManagedInstanceRole": {
+                  "Type": "AWS::IAM::Role",
+                  "Properties": {
+                      "AssumeRolePolicyDocument": {
+                          "Version": "2012-10-17",
+                          "Statement": [
+                              {
+                                  "Effect": "Allow",
+                                  "Principal": {
+                                      "Service": [
+                                          "ssm.amazonaws.com",
+                                          "ec2.amazonaws.com"
+                                      ]
+                                  },
+
+                                  "Action": "sts:AssumeRole"
+                              }
+                          ]
+                      },
+                      "ManagedPolicyArns": [
+                          "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM"
+                      ]
+                  }
+              },
+
+      "ManagedInstanceProfile": {
+                  "Type": "AWS::IAM::InstanceProfile",
+                  "Properties": {
+                      "Path": "/",
+                      "Roles": [
+                          {
+                              "Ref": "ManagedInstanceRole"
+                          }
+                      ]
+                  }
+              },
+
+      "AutomationServiceRole": {
+                "Type": "AWS::IAM::Role",
+                "Properties": {
+                    "AssumeRolePolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                            {
+                                "Effect": "Allow",
+                                "Principal": {
+                                    "Service": [
+                                        "ssm.amazonaws.com",
+                                        "ec2.amazonaws.com"
+                                    ]
+                                },
+                                "Action": "sts:AssumeRole"
+                            }
+                        ]
+                    },
+                    "ManagedPolicyArns": [
+                        "arn:aws:iam::aws:policy/service-role/AmazonSSMAutomationRole"
+                    ],
+                    "Path": "/",
+                    "Policies": [
+                        {
+                            "PolicyName": "passrole",
+                            "PolicyDocument": {
+                                "Version": "2012-10-17",
+                                "Statement": [
+                                    {
+                                        "Effect": "Allow",
+                                        "Action": [
+                                            "iam:PassRole"
+                                        ],
+                                        "Resource": [
+                                            {
+                                                "Fn::GetAtt": [
+                                                    "ManagedInstanceRole",
+                                                    "Arn"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "Effect": "Allow",
+                                        "Action": [
+                                            "ssm:*",
+                                            "kms:*"
+                                        ],
+                                        "Resource": "*"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            },
+
+      "GoldenAMIAutomationDoc": {
+                  "Type": "AWS::SSM::Document",
+                  "Properties": {
+                      "DocumentType": "Automation",
+                      "Name": "Eiger-GoldenAMIAutomationDoc",
+                      "Content": {
+                          "description": "This automation document triggers Golden AMI creation workflow.",
+                          "schemaVersion": "0.3",
+                          "assumeRole": {
+                              "Fn::GetAtt": [
+                                  "AutomationServiceRole",
+                                  "Arn"
+                              ]
+                          },
+                          "parameters": {
+                              "ImageAmiId": {
+                                  "type": "String",
+                                  "description": "golden AMI ImageAmiId",
+                                  "default": ""
+                              },
+
+                              "QualysUsername": {
+                                "default": "/GoldenAMI/Qualys/QualysUsername",
+                                "description": "SSM parameter name of Qualys username to access API",
+                                "type": "String"
+                              },
+
+                              "QualysPassword": {
+                                "default": "/GoldenAMI/Qualys/QualysPassword",
+                                "description": "SSM parameter name of the Qualys password to access API",
+                                "type": "String"
+                              },
+
+                              "QualysScannerName": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysScannerName}}",
+                                "description": "Scanner name for launching Qualys VM Scan",
+                                "type": "String"
+                              },
+
+                              "Ec2ConnectorName": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysEc2ConnectorName}}",
+                                "description": "Connector name for launching Qualys EC2 Vulnerability Scan",
+                                "type": "String"
+                              },
+
+                              "Ec2ConnectorId": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysEc2ConnectorId}}",
+                                "description": "Connector ID for launching Qualys EC2 Scan",
+                                "type": "String"
+                              },
+
+                              "SshKeyName": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/SSHKeyName}}",
+                                "description": "SSH Key for Qualys Authentication Record",
+                                "type": "String"
+                              },
+
+                              "QualysVmOptionId": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysVmOptionId}}",
+                                "description": "Option ID for launching Qualys VM Scan",
+                                "type": "String"
+                              },
+
+                              "QualysRunPcScan": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysRunPcScan}}",
+                                "description": "Enable Qualys PC Scan for GAP",
+                                "type": "String"
+                              },
+
+                              "QualysPCOptionId": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysPCOptionId}}",
+                                "description": "Option ID for launching Qualys PC Scan",
+                                "type": "String"
+                              },
+
+                              "QualysQcaActivationID": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysQcaActivationID}}",
+                                "description": "SSM Parameter for Qualys QCA Activation ID",
+                                "type": "String"
+                              },
+
+                              "QualysQcaCustomerID": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysQcaCustomerID}}",
+                                "description": "SSM Parameter for Qualys QCA Customer ID",
+                                "type": "String"
+                              },
+
+                              "QualysQcaLogLevel": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysQcaLogLevel}}",
+                                "description": "SSM Parameter for Qualys Cloud Agent Log Level",
+                                "type": "String"
+                              },
+
+                              "QualysApiUrl": {
+                                "type": "String",
+                                "description": "Your Qualys URL for accessing API",
+                                "default": {
+                                    "Ref": "qualysApiUrl"
+                                  }
+                              },
+
+                              "QualysParentTagId": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysParentTagId}}",
+                                "description": "SSM parameter for the Qualys Parent Tag ID",
+                                "type": "String"
+                              },
+
+                              "productName": {
+                                  "type": "String",
+                                  "description": "The syntax of this parameter is ProductName-ProductVersion.",
+                                  "default": {
+                                      "Ref": "productName"
+                                }
+                              },
+
+                              "productOSAndVersion": {
+                                  "type": "String",
+                                  "description": "The syntax of this parameter is OSName-OSVersion",
+                                  "default": {
+                                      "Ref": "productOSAndVersion"
+                                  }
+                                },
+
+                              "AMIVersion": {
+                                  "type": "String",
+                                  "description": "Golden AMI Build version number to be created.",
+                                  "default": {
+                                      "Ref": "buildVersion"
+                                  }
+                                },
+
+                              "securityGroupId": {
+                                  "type": "String",
+                                  "default": {
+                                    "Fn::GetAtt" : ["secGroup", "GroupId"]
+                                },
+                                  "description": "Security Group that will be attached to the instance. By Default a security group without any inbound access is attached"
+                              },
+
+                              "instanceType": {
+                                  "type": "String",
+                                  "description": "A compatible instance-type for launching an instance",
+                                  "default": {
+                                      "Ref": "instanceType"
+                                  }
+                              },
+
+                              "ApproverUserIAMARN": {
+                                  "type": "String",
+                                  "description": "IAM ARN of the user who has SSM approval permissions.",
+                                  "default": {
+                                      "Ref": "ApproverUserIAMARN"
+                                  }
+                                },
+
+                              "ManagedInstanceProfile": {
+                                  "type": "String",
+                                  "description": "Instance Profile. Do not change the default value.",
+                                  "default": {
+                                      "Ref": "ManagedInstanceProfile"
+                                  }
+                              },
+
+                              "PreUpdateScript": {
+                                  "type": "String",
+                                  "description": "(Optional) URL of a script to run before updates are applied. Default (\"none\") is to not run a script.",
+                                  "default": "none"
+                              },
+
+                              "PostUpdateScript": {
+                                  "type": "String",
+                                  "description": "(Optional) URL of a script to run after package updates are applied. Default (\"none\") is to not run a script.",
+                                  "default": "none"
+                              }
+
+                          },
+                          "mainSteps": [
+                              {
+                                  "name": "TagTheAMI",
+                                  "action": "aws:createTags",
+                                  "timeoutSeconds": 1200,
+                                  "maxAttempts": 1,
+                                  "onFailure": "Continue",
+                                  "inputs": {
+                                      "ResourceType": "EC2",
+                                      "ResourceIds": [
+                                          "{{ImageAmiId}}"
+                                      ],
+                                      "Tags": [
+                                          {
+                                              "Key": "ProductOSAndVersion",
+                                              "Value": "{{productOSAndVersion}}"
+                                          },
+                                          {
+                                              "Key": "ProductName",
+                                              "Value": "{{productName}}"
+                                          },
+                                          {
+                                              "Key": "version",
+                                              "Value": "{{AMIVersion}}"
+                                          },
+                                          {
+                                              "Key": "AMI-Type",
+                                              "Value": "Golden"
+                                          }
+                                      ]
+                                  }
+                              },
+                              {
+                                  "name": "createInstanceFromNewImage",
+                                  "action": "aws:runInstances",
+                                  "timeoutSeconds": 1200,
+                                  "maxAttempts": 3,
+                                  "onFailure": "Abort",
+                                  "inputs": {
+                                      "ImageId": "{{ImageAmiId}}",
+                                      "InstanceType": "{{instanceType}}",
+                                      "MinInstanceCount": 1,
+                                      "MaxInstanceCount": 1,
+                                      "KeyName": "{{ SshKeyName }}",
+                                      "SecurityGroupIds": [
+                                          "{{ securityGroupId }}"
+                                      ],
+                                      "IamInstanceProfileName": "{{ ManagedInstanceProfile }}",
+                                      "TagSpecifications":[
+                                        {
+                                           "ResourceType":"instance",
+                                           "Tags":[
+                                              {
+                                                 "Key":"Name",
+                                                 "Value":"QualysAutoScanTest2"
+                                              }
+                                           ]
+                                        }
+                                    ]
+                                 }
+                              },
+                              {
+                                "maxAttempts": 3,
+                                "inputs": {
+                                  "Parameters": {
+                                    "commands": [
+                                      "set -e",
+                                      "INSTANCE_ID=$(curl -s 'http://169.254.169.254/latest/meta-data/instance-id')",
+                                      "AMI_ID=$(curl -s 'http://169.254.169.254/latest/meta-data/ami-id')",
+                                      "REGION=\"{{global:REGION}}\"",
+                                      "QualysUsername=$(aws ssm get-parameter --with-decryption --region $REGION --name {{QualysUsername}} --query 'Parameter.Value' --output text)",
+                                      "QualysPassword=$(aws ssm get-parameter --with-decryption --region $REGION --name {{QualysPassword}} --query 'Parameter.Value' --output text)",
+                                      "echo curl -H \"X-Requested-With: Curl\" -H \"Content-Type: application/json\" -H \"Accept: application/json\" -u \"$QualysUsername:$QualysPassword\" -X \"POST\" -d \"{\\\"ServiceRequest\\\":{\\\"data\\\":{\\\"Tag\\\":{\\\"name\\\":\\\"GAP $AMI_ID $INSTANCE_ID\\\",\\\"parentTagId\\\":\\\"{{QualysParentTagId}}\\\",\\\"ruleType\\\":\\\"CLOUD_ASSET\\\",\\\"provider\\\":\\\"EC2\\\",\\\"ruleText\\\":\\\"aws.ec2.imageId:$AMI_ID\\\",\\\"color\\\":\\\"#FFD700\\\"}}}}\" \"{{QualysApiUrl}}/qps/rest/2.0/create/am/tag/\" > create-tag-log.txt",
+                                      "sleep 5m",
+                                      "echo curl -H \"X-Requested-With: Curl\" -H \"Content-Type: text/xml\" -H \"Accept: text/xml\" -u \"$QualysUsername:$QualysPassword\" -X \"POST\" -d \"<?xml version=\"1.0\" encoding=\"UTF-8\" ?><ServiceRequest><filters><Criteria field=\"tagName\" operator=\"EQUALS\">GAP $AMI_ID $INSTANCE_ID</Criteria></filters></ServiceRequest>\" {{QualysApiUrl}}/qps/rest/2.0/deactivate/am/asset ",
+                                      "sleep 5m",
+                                      "echo curl -H \"X-Requested-With: Curl\" -u \"$QualysUsername:$QualysPassword\" -X \"POST\" \"{{QualysApiUrl}}/qps/rest/2.0/run/am/assetdataconnector/{{Ec2ConnectorId}}\"> ec2-scan-launch-log.txt",
+                                      "sleep 5m",
+                                      "echo curl -H \"X-Requested-With: Curl\" -u \"$QualysUsername:$QualysPassword\" -X \"POST\" -d \"action=launch&scan_title=CANDIDATE+AMI+Scan+{{ImageAmiId}}&ec2_instance_ids=$INSTANCE_ID&connector_name={{Ec2ConnectorName}}&ec2_endpoint=$REGION&option_id={{QualysVmOptionId}}&iscanner_name={{QualysScannerName}}\" \"{{QualysApiUrl}}/api/2.0/fo/scan/\"> vm-scan-launch-log.txt",
+                                      "sleep 10m"
+                                    ]
+                                  },
+                                  "InstanceIds": [
+                                    "{{ createInstanceFromNewImage.InstanceIds }}"
+                                  ],
+                                  "DocumentName": "AWS-RunShellScript"
+                                },
+                                "name": "LaunchQualysAssessment",
+                                "action": "aws:runCommand",
+                                "timeoutSeconds": 3600,
+                                "onFailure": "Abort"
+                              },
+                              {
+                                  "name": "sleep2",
+                                  "action": "aws:sleep",
+                                  "inputs": {
+                                      "Duration": "PT01M"
+                                  }
+                              },
+                              {
+                                  "name": "TagNewinstance",
+                                  "action": "aws:createTags",
+                                  "timeoutSeconds": 1200,
+                                  "maxAttempts": 1,
+                                  "onFailure": "Continue",
+                                  "inputs": {
+                                      "ResourceType": "EC2",
+                                      "ResourceIds": [
+                                          "{{ createInstanceFromNewImage.InstanceIds }}"
+                                      ],
+                                      "Tags": [
+                                          {
+                                              "Key": "Type",
+                                              "Value": "{{ImageAmiId}}-{{productOSAndVersion}}/{{productName}}/{{AMIVersion}}"
+                                          },
+                                           {
+                                              "Key": "Automation-Instance-Type",
+                                              "Value": "Golden"
+                                          }
+                                      ]
+                                  }
+                              },
+                              {
+                                  "name": "sleep",
+                                  "action": "aws:sleep",
+                                  "inputs": {
+                                      "Duration": "PT01M"
+                                  }
+                              }
+                          ]
+                      }
+                  }
+              }
+      }
+
+}

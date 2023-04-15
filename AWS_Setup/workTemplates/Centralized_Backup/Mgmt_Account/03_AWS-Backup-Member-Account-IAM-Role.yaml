@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  This Template Creates the Backup IAM role Required for the Automated Centralized Backup at Scale in AWS Organizations using AWS Backup.
+  It should be deployed in each member account.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: AWS Member Account Backup Configuration
+        Parameters:
+          - pCrossAccountBackupRole
+          - pMemberTagKey
+          - pMemberTagValue
+    ParameterLabels:
+      pCrossAccountBackupRole:
+        default: Enter an IAM Role Name
+      pMemberTagKey:
+        default: Enter a Tag Key
+      pMemberTagValue:
+        default: Enter a Tag Value
+Parameters:
+  pCrossAccountBackupRole:
+    Type: String
+    Description: This is the IAM role name for the cross-account backup role that carries out the backup activities.
+    Default: AWSCrossAccountBackupRole
+  pMemberTagKey:
+    Type: String
+    Description: This is the tag key to assign to resources.
+    Default: managedby
+  pMemberTagValue:
+    Type: String
+    Description: This is the tag value to assign to resources.
+    Default: cloud_and_automation_team
+
+Resources:
+  rOrgAccountBackupRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Description: Allows AWS Backup to access AWS services
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - backup.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores
+      RoleName: !Sub ${pCrossAccountBackupRole}
+      Policies:
+      - PolicyName: !Sub ${pCrossAccountBackupRole}-ExtraPolicies
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - iam:PassRole
+            - iam:AttachRolePolicy
+            - iam:CreateRole
+            - iam:ListRoles
+            Resource: "*"
+      - PolicyName: !Sub ${pCrossAccountBackupRole}-s3
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:*
+            Resource: "arn:aws:s3:::ec2imagebuilder-eiger-infra/*"      
+      Tags:
+        - Key: !Ref pMemberTagKey
+          Value: !Ref pMemberTagValue
+          
+Outputs:
+  oOrgAccountBackupRole:
+    Value: !Ref rOrgAccountBackupRole

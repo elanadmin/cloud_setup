@@ -1,0 +1,151 @@
+{
+                    "versionlessArn": "arn:aws:imagebuilder:us-east-1:169523143400:image/rhel-7-golden",
+                    "semver": "1237940039285380274899124227",
+                    "arn": "arn:aws:imagebuilder:us-east-1:169523143400:image/rhel-7-golden/1.0.0/3",
+                    "name": "RHEL_8_Golden",
+                    "version": "1.0.0",
+                    "type": "AMI",
+                    "buildVersion": 3,
+                    "state": {
+                        "status": "AVAILABLE"
+                    },
+                    "platform": "Linux",
+                    "imageRecipe": {
+                        "arn": "arn:aws:imagebuilder:us-east-1:169523143400:image-recipe/rhel-7-golden/1.0.0",
+                        "name": "RHEL_8_Golden",
+                        "version": "1.0.0",
+                        "description": "RHEL_8_Golden",
+                        "components": [
+                            {
+                                "componentArn": "arn:aws:imagebuilder:us-east-1:627945338248:component/update-linux/1.0.1/1"
+                            },
+                            {
+                                "componentArn": "arn:aws:imagebuilder:us-east-1:627945338248:component/aws-cli-version-2-linux/1.0.3/1"
+                            },
+                            {   
+                                "componentArn": "arn:aws:imagebuilder:us-east-1:169523143400:component/cb-psc-sensor-agent/2.11.3/1"
+                            },
+                            {   
+                                "componentArn": "arn:aws:imagebuilder:us-east-1:169523143400:component/qualys-cloud-agent/4.7.0/1"
+                            },
+                            {   
+                                "componentArn": "arn:aws:imagebuilder:us-east-1:627945338248:component/amazon-cloudwatch-agent-linux/1.0.1/1"
+                            },
+                            {   
+                                "componentArn": "arn:aws:imagebuilder:us-east-1:169523143400:component/misc-postrun-scripts/1.0.0/1"
+                            },
+                            {   
+                                "componentArn": "arn:aws:imagebuilder:us-east-1:627945338248:component/reboot-test-linux/1.0.0/1"
+                            },
+                            {   
+                                "componentArn": "arn:aws:imagebuilder:us-east-1:627945338248:component/simple-boot-test-linux/1.0.0/1"
+                            }
+                        ],
+                        "platform": "Linux",
+                        "parentImage": "arn:aws:imagebuilder:us-east-1:627945338248:image/red-hat-enterprise-linux-7-x86/2021.10.11/1",
+                        "blockDeviceMappings": [
+                            {
+                                "deviceName": "/dev/sda1",
+                                "ebs": {
+                                    "encrypted": "true",
+                                    "deleteOnTermination": true,
+                                    "kmsKeyId": "arn:aws:kms:us-east-1: 169523143400:alias/ebs_makey",
+                                    "volumeSize": 10,
+                                    "volumeType": "gp2"
+                                }
+                            }
+                        ],
+                        "dateCreated": "Feb 23,2022 10: 09: 29 AM",
+                        "tags": {
+                            "internalId": "cb273344-b986-493d-a426-47b995e6d207",
+                            "resourceArn": "arn:aws:imagebuilder:us-east-1: 169523143400:image-recipe/rhel-8-golden/1.0.0"
+                        },
+                        "accountId": "169523143400"
+                    },
+                    "sourcePipelineArn": "arn:aws:imagebuilder:us-east-1: 169523143400:image-pipeline/rhel-7-golden",
+                    "infrastructureConfiguration": {
+                        "arn": "arn:aws:imagebuilder:us-east-1: 169523143400:infrastructure-configuration/linux-infrastructure-golden",
+                        "name": "Linux_Infrastructure_Golden",
+                        "description": "Linux",
+                        "instanceTypes": [
+                            "t2.small"
+                        ],
+                        "instanceProfileName": "EC2ImageBuilderInstanceProfile",
+                        "tags": {
+                            "internalId": "b72001fb-2954-4a62-9ceb-4380c137b12b",
+                            "resourceArn": "arn:aws:imagebuilder:us-east-1: 169523143400:infrastructure-configuration/linux-infrastructure-golden"
+                        },
+                        "logging": {
+                            "s3Logs": {
+                                "s3BucketName": "ec2imagebuilder-eiger-infra",
+                                "s3KeyPrefix": "Logs"
+                            }
+                        },
+                        "keyPair": "ec2imagebuilder",
+                        "terminateInstanceOnFailure": true,
+                        "snsTopicArn": "arn:aws:sns:us-east-1: 169523143400:EC2_Image_Builder_Notification",
+                        "dateCreated": "Feb 1, 2022 4: 41: 08 PM",
+                        "dateUpdated": "Feb 22,2022 4: 01: 26 AM",
+                        "accountId": "169523143400"
+                    },
+                    "imageTestsConfigurationDocument": {
+                        "imageTestsEnabled": true,
+                        "timeoutMinutes": 720
+                    },
+                    "distributionConfiguration": {
+                        "arn": "arn:aws:imagebuilder:us-east-1: 169523143400:distribution-configuration/rhel-8-golden",
+                        "name": "RHEL_8_Golden",
+                        "description": "RHEL_8_Golden Distribution",
+                        "dateCreated": "Feb 23, 2022 10: 09: 26 AM",
+                        "distributions": [
+                            {
+                                "region": "us-east-1",
+                                "amiDistributionConfiguration": {
+                                    "name": "RHEL_8_Golden 2022-02-23T10-11-00.027Z",
+                                    "description": "RHEL_8_Golden Distribution",
+                                    "kmsKeyId": "arn:aws:kms:us-east-1: 169523143400:alias/ebs_makey",
+                                    "amiTags": {
+                                        "Platform": "RHEL8",
+                                        "Purpose": "GoldenImage"
+                                    },
+                                    "launchPermission": {
+                                        "organizationalUnitArns": [
+                                            "arn:aws:organizations: : 188206870753:ou/o-980c72tm8e/ou-o8tt-rn48gyv3",
+                                            "arn:aws:organizations: : 188206870753:ou/o-980c72tm8e/ou-o8tt-7cu9j0xy",
+                                            "arn:aws:organizations: : 188206870753:ou/o-980c72tm8e/ou-o8tt-ph9mxujn"
+                                        ]
+                                    }
+                                }
+                            }
+                        ],
+                        "tags": {
+                            "internalId": "d169f1dd-2a87-4f6f-ba0a-bece08f5298d",
+                            "resourceArn": "arn:aws:imagebuilder:us-east-1: 169523143400:distribution-configuration/rhel-8-golden"
+                        },
+                        "accountId": "169523143400"
+                    },
+                    "dateCreated": "Feb 23, 2022 10: 11: 00 AM",
+                    "outputResources": {
+                        "amis": [
+                            {
+                                "region": "us-east-1",
+                                "image": "ami-0616d081750af0687",
+                                "name": "RHEL_8_Golden 2022-02-23T10-11-00.027Z",
+                                "description": "RHEL_8_Golden Distribution",
+                                "accountId": "169523143400"
+                            }
+                        ]
+                    },
+                    "buildExecutionId": "37b2e392-dc6b-4f25-88d3-e97715c2a0cb",
+                    "testExecutionId": "5398c635-4ef4-411b-b6d7-a72658da5d15",
+                    "distributionJobId": "7a8f8d07-e45d-4f55-acd9-8a800d2e1f6e",
+                    "integrationJobId": "73aa3cb7-31e2-4ae7-b552-001a69702da4",
+                    "accountId": "169523143400",
+                    "osVersion": "Red Hat Enterprise Linux Server 8",
+                    "enhancedImageMetadataEnabled": true,
+                    "buildType": "USER_INITIATED",
+                    "tags": {
+                        "internalId": "0e4d3718-1652-48af-8121-42295a041468",
+                        "resourceArn": "arn:aws:imagebuilder:us-east-1: 169523143400:image/rhel-8-golden/1.0.0/3"
+                    }
+}

@@ -1,0 +1,175 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  This template creates the central backup KMS Key and Vault required for the automated centralized backup at scale in AWS Organizations using AWS Backup.
+  It should be deployed in to Central Vault Backup Account.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: AWS Backup Configuration
+        Parameters:
+          - pCentralAccountBackupRole
+          - pBackupKeyAlias
+          - pCentralBackupVaultName
+          - pOrganizationId
+          - pMgmtTagKey
+          - pMgmtTagValue
+          - pOwnerTagKey
+          - pOwnerTagValue
+    ParameterLabels:
+      pCentralAccountBackupRole:
+        default: Enter an IAM Role Name
+      pBackupKeyAlias:
+        default: Backup KMS Key Alias Name
+      pCentralBackupVaultName:
+        default: Backup vault name (Case sensitive)
+      pOrganizationId:
+        default: Organization ID
+      pCentralTagKey:
+        default: Enter Management Tag Key
+      pCentralTagValue:
+        default: Enter Management Tag Value
+      pOwnerTagKey:
+        default: Enter Owner Tag Key
+      pOwnerTagValue:
+        default: Enter Owner Tag Value
+Parameters:
+  pCentralAccountBackupRole:
+    Type: String
+    Description: This is the IAM role name for the Central Account Backup Role that carries out the backup activities.
+    Default: AWSCentralAccountBackupRole
+  pBackupKeyAlias:
+    Type: String
+    Description: This is the name of the AWS Backup KMS key alias.
+    Default: aws_backup_central_key
+  pCentralBackupVaultName:
+    Type: String
+    Description: This is the name of the centralized account backup vault.
+    AllowedPattern: ^[a-zA-Z0-9\-\_\.]{1,50}$
+    ConstraintDescription: Backup vault name is case sensitive.
+    Default: Infrastructure_AWS_Central_Backup_Vault
+  pOrganizationId:
+    Type: String
+    Description: This is the AWS Organization ID value.
+    MinLength: 12
+    MaxLength: 12
+    AllowedPattern: '^o-[a-z0-9]{10,32}$'
+    ConstraintDescription: >
+      The Organization Id must be a 12 character string starting with o- and followed by 10 lower case
+      alphanumeric characters
+    Default: o-980c72tm8e
+  pMgmtTagKey:
+    Type: String
+    Description: This is the Mgmt tag key to assign to resources.
+    Default: ManagedBy
+  pMgmtTagValue:
+    Type: String
+    Description: This is the Mgmt tag value to assign to resources.
+    Default: Cloud_Infrastructure_Team
+  pOwnerTagKey:
+    Type: String
+    Description: This is the Owner tag key to assign to resources.
+    Default: Owner
+  pOwnerTagValue:
+    Type: String
+    Description: This is the Owner tag value to assign to resources.
+    Default: Infrastructure
+
+Resources:
+  rOrgAccountBackupRoleCentral:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Description: Allows AWS Backup to access AWS services
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - backup.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores
+      RoleName: !Sub ${pCentralAccountBackupRole}
+      Tags:
+        - Key: !Ref pMgmtTagKey
+          Value: !Ref pMgmtTagValue
+        - Key: !Ref pOwnerTagKey
+          Value: !Ref pOwnerTagValue
+
+  rCentralAccountBackupKey:
+    Type: AWS::KMS::Key
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: F76
+            reason: The principal is restricted by the condition statement
+    Properties:
+      Description: "Central Backup Account Key"
+      EnableKeyRotation: True
+      KeyPolicy:
+        Version: "2012-10-17"
+        Id: !Sub ${pBackupKeyAlias}
+        Statement:
+          -
+            Sid: "Enable IAM User Permissions"
+            Effect: "Allow"
+            Principal:
+              AWS:
+                - !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          
+          -
+            Sid: "Allow alias creation during setup"
+            Effect: "Allow"
+            Principal:
+              AWS: "*"
+            Action: "kms:CreateAlias"
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "kms:CallerAccount": !Sub ${AWS::AccountId}
+                "kms:ViaService": !Sub "cloudformation.${AWS::Region}.amazonaws.com"
+      Tags:
+        - Key: !Ref pMgmtTagKey
+          Value: !Ref pMgmtTagValue
+        - Key: !Ref pOwnerTagKey
+          Value: !Ref pOwnerTagValue
+
+  rCentralAccountBackupKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/${pBackupKeyAlias}
+      TargetKeyId:
+        !Ref rCentralAccountBackupKey
+
+  rCentralBackupVault:
+    Type: AWS::Backup::BackupVault
+    Properties:
+      BackupVaultName: !Ref pCentralBackupVaultName
+      BackupVaultTags:
+        Owner: Infrastructure
+        ManagedBy: Cloud_Infrastructure_Team
+        VaultType: CentralBackup
+      EncryptionKeyArn: !GetAtt rCentralAccountBackupKey.Arn
+      AccessPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Allow access to backup vault"
+            Effect: Allow
+            Action: backup:CopyIntoBackupVault
+            Resource: "*"
+            Principal: "*"
+            Condition:
+              StringEquals:
+                aws:PrincipalOrgID: !Ref pOrganizationId
+Outputs:
+  oCentralBackupVault:
+    Value: !Ref rCentralBackupVault
+  oOrgAccountBackupRoleCentral:
+    Value: !Ref rOrgAccountBackupRoleCentral

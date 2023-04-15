@@ -1,0 +1,153 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation template to configure a target account for a scheduled multi-account and multi-region Automation patching operation.
+Parameters :
+  ManagementAccountNumber:
+    Type : 'String'
+    Description: 'Management Master AccountID.'
+    Default: 188206870753
+  InfrastructureAccountNumber:
+    Type : 'String'
+    Description: 'Infrastructure AccountID.'
+    Default: 169523143400
+  InstanceProfile:
+    Type : 'String'
+    Description: 'EC2 Instance Profile.'
+    Default: AmazonEC2RoleforSSM
+Resources:
+  AutomationExecutionServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ssm.amazonaws.com
+            AWS: 
+            - !Join [ '', ['arn:', !Ref 'AWS::Partition', ':iam::', !Ref 'ManagementAccountNumber', ':root'] ]
+            - !Join [ '', ['arn:', !Ref 'AWS::Partition', ':iam::', !Ref 'InfrastructureAccountNumber', ':root'] ]
+          Action: sts:AssumeRole
+      Path: "/"
+      RoleName: AWS-SystemsManager-AutomationExecutionRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+      - arn:aws:iam::aws:policy/service-role/AmazonSSMAutomationRole
+      Policies:
+      - PolicyName: passRole
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - iam:PassRole
+            Resource: 
+            - !Join [ '', ['arn:', !Ref 'AWS::Partition', ':iam::', !Ref 'AWS::AccountId', ':role/AWS-SystemsManager-AutomationExecutionRole'] ]
+            - !Sub "arn:aws:iam::${AWS::AccountId}:role/${InstanceProfile}"
+            - !Sub "arn:aws:iam::${AWS::AccountId}:instance-profile/${InstanceProfile}"
+      - PolicyName: getTagPermissions
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - tag:GetResources
+            Resource: "*"
+      - PolicyName: listResourceGroupResourcesPermissions
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - resource-groups:listGroupResources
+            Resource: "*"
+      - PolicyName: startAutomationAndCommandPermissions
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ssm:StartAutomationExecution
+            Resource:
+            - arn:aws:ssm:*:*:automation-definition/Automation-RunPatchBaseline:*
+            - arn:aws:ssm:*:*:automation-definition/Eiger-*:*
+            - arn:aws:ssm:*:*:automation-definition/AWS-*:*
+          - Effect: Allow
+            Action:
+            - ssm:SendCommand
+            Resource:
+            - arn:aws:ssm:*::document/AWS-*
+            - arn:aws:ec2:*:*:instance/*
+            - arn:aws:ssm:*:*:managed-instance/*
+            - arn:aws:ssm:*::document/Amazon*
+      - PolicyName: describeEC2AndSSMPermissions
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ec2:DescribeInstanceStatus
+            - ec2:DescribeTags
+            - ec2:DescribeImages
+            - ec2:CreateImage
+            - ec2:CreateSnapshot
+            Resource:
+            - "*"
+          - Effect: Allow
+            Action:
+            - ssm:DescribeInstanceInformation
+            - ssm:GetAutomationExecution
+            - ssm:GetParameters
+            - ssm:ListCommands
+            - ssm:ListCommandInvocations
+            - ssm:DescribeAutomationStepExecutions
+            Resource:
+            - "*"
+      - PolicyName: LogStreamPermissions
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:DescribeLogStreams
+            - logs:DescribeLogGroups
+            Resource:
+            - "*"
+      - PolicyName: ManageSecurityGroups
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ec2:AuthorizeSecurityGroupIngress
+            - ec2:CreateSecurityGroup
+            - ec2:DeleteSecurityGroup
+            - ec2:DescribeSecurityGroups
+            - ec2:DescribeSecurityGroupRules
+            - ec2:ModifySecurityGroupRules
+            - ec2:UpdateSecurityGroupRuleDescriptionsIngress
+            Resource:
+            - "*"
+      - PolicyName: KeyManagement
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - kms:DescribeKey
+            - kms:Encrypt
+            - kms:Decrypt
+            - kms:ReEncrypt*
+            - kms:GenerateDataKey
+            - kms:GenerateDataKeyWithoutPlaintext
+            - kms:CreateGrant
+            - kms:ListGrants
+            - kms:RevokeGrant
+            Resource:
+            - "*"
+      
+      

@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation template to create ResourceGroup using EC2 Instance Filter with Tags.
+
+Parameters:
+  RGName:
+    Type: String
+    Default: Eiger-Linux-Migration
+    Description: >-
+      "ResourceGroup Name and PatchGroup Tag Value:"
+
+  Owner:
+    Type: String
+    Default: Infrastructure
+    Description: >-
+      "Owner tag value on the ResourceGroup:"
+
+Resources:
+  TagBasedResourceGroup:
+    Type: "AWS::ResourceGroups::Group"
+    Properties:
+      Name: !Ref RGName
+      Description: "EC2 Instances for Linux Post Migration Tasks managed by Cloud and Automation Team with AWS SSM Automation."
+      ResourceQuery:
+        Type:
+          "TAG_FILTERS_1_0" 
+        Query:
+          ResourceTypeFilters: 
+            - "AWS::EC2::Instance" 
+          TagFilters:
+            - Key: "Migrated" 
+              Values: "Yes"

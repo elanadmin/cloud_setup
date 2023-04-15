@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  This template creates the ControlTower StackSet Roles and Policies in mgmt Account, to assume ExecutionRole in MemberAccounts, It should be deployed only in mgmt account.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: AWS Mgmt Account Backup Configuration
+        Parameters:
+          - pMgmtTagKey
+          - pMgmtTagValue
+    ParameterLabels:
+      pMgmtTagKey:
+        default: Enter a Tag Key
+      pMgmtTagValue:
+        default: Enter a Tag Value
+Parameters:
+  StackSetRolePolicyName:
+    Type: String
+    Description: This is the IAM Policy for the ControlTower Execution using CloudFormation.
+    Default: AWSControlTowerStackSetRolePolicy
+  StackSetRoleName:
+    Type: String
+    Description: This is the IAM Role for the ControlTower Execution using CloudFormation.
+    Default: AWSControlTowerStackSetRole
+  pMgmtTagKey:
+    Type: String
+    Description: This is the tag key to assign to resources.
+    Default: managedby
+  pMgmtTagValue:
+    Type: String
+    Description: This is the tag value to assign to resources.
+    Default: cloud_and_automation_team
+
+Resources:
+  AWSControlTowerStackSetRole:
+      Type: "AWS::IAM::Role"
+      Properties:
+        RoleName: !Ref StackSetRoleName
+        Description: AWS CloudFormation Assumes This Role to Deploy Stacksets in Accounts Created by AWS ControlTower.
+        AssumeRolePolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+                Effect: Allow
+                Principal:
+                    Service:
+                        - cloudformation.amazonaws.com
+                Action: sts:AssumeRole
+        Path: "/"
+        Tags:
+          - Key: !Ref pMgmtTagKey
+            Value: !Ref pMgmtTagValue
+
+  AWSControlTowerStackSetRolePolicy:
+      Type: AWS::IAM::Policy
+      DependsOn: 
+        - AWSControlTowerStackSetRole
+      Properties:
+        PolicyName: !Ref StackSetRolePolicyName
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - sts:AssumeRole
+              Resource: "arn:aws:iam::*:role/AWSControlTowerExecution"
+        Roles:
+          - !Ref StackSetRoleName
+
+Outputs:
+  oStackSetRoleName:
+    Value: !Ref AWSControlTowerStackSetRole

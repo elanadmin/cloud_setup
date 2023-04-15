@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation template to configure CrossAccount EC2Role.
+Parameters :
+  ManagementAccountNumber:
+    Type : 'String'
+    Description: 'Account number for the central management account.'
+    Default: "169523143400"
+Resources:
+  AmazonEC2RoleForSSM:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Description: "Amazon CrossAccount EC2Role for SSM, managed by Cloudformation StackSet"
+      Path: "/"
+      RoleName: "AmazonEC2RoleforSSM"
+      ManagedPolicyArns: 
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+  
+  EC2InstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      InstanceProfileName: "AmazonEC2RoleforSSM"
+      Path: "/"
+      Roles: 
+        - 
+          Ref: "AmazonEC2RoleForSSM"
+    DependsOn: "AmazonEC2RoleForSSM"

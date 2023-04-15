@@ -1,0 +1,155 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Metadata:
+    Generator: "former2"
+Description: "EC2 ImageBuilder Component for Qualys Agent"
+
+Parameters: 
+  s3downloadbucket:
+    Description: "Name of the S3 Bucket to download data from"
+    Type: String
+    Default: "ec2imagebuilder-eiger-infra"
+
+Resources:
+    ImageBuilderComponent:
+        Type: "AWS::ImageBuilder::Component"
+        Properties:
+            Name: "qualys-cloud-agent"
+            Description: "Install Qualys Cloud Agent."
+            Version: "4.7.0"
+            Platform: "Linux"
+            Tags:
+              Purpose: "GoldenImage"
+              Platform: "Linux"
+            Data: |
+              name: qualys-cloud-agent
+              description: Install Qualys Cloud Agent.
+              schemaVersion: 1.0
+
+              parameters:
+                - ActivationId:
+                    type: string
+                    default: '96f4172e-2d4e-462d-92a7-4e96a80f2c34'
+                    description: qualys-cloud-agent ActivationId.
+                
+                - CustomerId:
+                    type: string
+                    default: 'e76a2f4e-d6af-e59c-82c6-a64e3ad45856'
+                    description: qualys-cloud-agent CustomerId.
+                    
+                - linux_qualysagent:
+                    type: string
+                    default: 'QualysCloudAgent'
+                    description: Qualys Agent Package Name for Linux Family.
+                
+                - QualysQcaLogLevel:
+                    type: string
+                    default: '0'
+                    description: Qualys Cloud Agent Log Level.
+
+                - package_type:
+                    type: string
+                    default: 'rpm'
+                    description: Qualys Agent Package Type.
+
+                - s3_download_bucket:
+                    type: string
+                    default: 'ec2imagebuilder-eiger-infra'
+                    description: S3 Download Bucket.
+
+              phases:
+                - name: build
+                  steps:
+                    - name: Fail
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - echo 1
+                          
+                    - name: OperatingSystemRelease
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            FILE=/etc/os-release
+                            if [ -e $FILE ]; then
+                              . $FILE
+                              MAJOR_VERSION=$(echo $VERSION_ID | grep -o ^[0-9])
+                              echo "$ID${MAJOR_VERSION:+${MAJOR_VERSION}}"
+                            else
+                              echo "The file $FILE does not exist. Failing build."
+                              exit {{ build.Fail.outputs.stdout }}
+                            fi
+                  
+                    - name: OperatingSystemArchitecture
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            ARCH=$(uname -m)
+                            if [ `echo $ARCH | grep -Ev '^(aarch64|x86_64)'` ]; then
+                              echo "The '$ARCH' architecture is not supported. Failing build."
+                              exit {{ build.Fail.outputs.stdout }}
+                            fi
+                            echo $ARCH
+                            
+                    - name: Check_Install_Kernel_KernelHeaders
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            kerneldevelver=$(yum list kernel-devel | grep kernel-devel | head -1 | awk '{print $2}')
+
+                            if [[ ! $(rpm -qa | grep kernel-${kerneldevelver}) ]];then
+                              echo -e "\nInstalling kernel and kernel-devel with version ${kerneldevelver}:\n"
+                              yum install -y kernel-${kerneldevelver} kernel-devel-${kerneldevelver}
+                              touch /tmp/reboot_required
+                            elif [[ ! $(rpm -qa | grep kernel-devel-${kerneldevelver}) ]];then
+                              echo -e "\nInstalling kernel-devel with version ${kerneldevelver}:\n"
+                              yum install -y kernel-devel-${kerneldevelver}
+                            else
+                              echo -e "\nBoth kernel and kernel-devel are already at latest version ${kerneldevelver}\n"
+                            fi
+
+                    - name: Reboot_If_Needed
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            if [[ -f "/tmp/reboot_required" ]];then
+                              echo -e "\nReboot Required, Initiating Reboot.\n"
+                              exit 194
+                            else
+                              echo -e "\nReboot Not Required.\n"
+                            fi
+
+                    - name: Install_qualys-cloud-agent
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            set -x
+                            os_release={{ build.OperatingSystemRelease.outputs.stdout }}
+                            qualysagent={{linux_qualysagent}}
+                            package_type={{package_type}}
+                            cd $(pwd)/
+                            aws s3 cp s3://{{s3_download_bucket}}/Software/common/${qualysagent}.${package_type} .
+                            if [[ -f "${qualysagent}.${package_type}" ]];then
+                              sudo rpm -ivh ${qualysagent}.${package_type}
+                              sudo systemctl stop qualys-cloud-agent
+                              sudo /usr/local/qualys/cloud-agent/bin/qualys-cloud-agent.sh ActivationId='{{ActivationId}}' CustomerId='{{CustomerId}}'
+                              sudo /usr/local/qualys/cloud-agent/bin/qualys-cloud-agent.sh LogLevel={{QualysQcaLogLevel}}
+                              sudo systemctl enable qualys-cloud-agent
+                              sudo systemctl stop qualys-cloud-agent
+                            else
+                              exit {{ build.Fail.outputs.stdout }}
+                            fi
+                          
+                - name: validate
+                  steps:
+                    - name: Validate_qualys-cloud-agent_Install
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - yum info kernel-devel-$(uname -r)
+                          - yum info qualys-cloud-agent
+                          - systemctl status qualys-cloud-agent --no-pager && echo -e "\nqualys-cloud-agent Service Running, As Not Expected.\n" || echo -e "\nqualys-cloud-agent Service Not Running, As Expected.\n"

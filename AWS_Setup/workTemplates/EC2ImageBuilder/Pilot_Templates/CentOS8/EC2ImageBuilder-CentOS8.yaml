@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Metadata:
+    Generator: "former2"
+Description: "EC2 Image Builder i.e Golden Image Creation Template for CentOS Linux8 EC2 Instances."
+
+Parameters:
+  ImageRecipeVersion:
+    Description: EC2 ImageBuilder ImageRecipe Version. 
+    Type: String
+    Default: "1.0.0"
+    AllowedPattern: "[0-9].[0.9].[0-9]"
+  
+  EBSEncryptionKey:
+    Description: "Name of the EC2 EBS Encryption Key."
+    Type: String
+    Default: "alias/ebs_makey"
+
+  ImageBuilderDistributionConfigurationName:
+    Description: "Name of the ImageBuilder Distribution Config."
+    Type: String
+    Default: "CentOS_8_Golden"
+
+  ImageBuilderImageRecipeName:
+    Description: "Name of the ImageBuilder Recipe Config."
+    Type: String
+    Default: "CentOS_8_Golden"
+  
+  OrganizationalUnitARNS:
+    Description: "Organizational Unit ARN's To Share the AMI to."
+    Type: CommaDelimitedList
+    Default: arn:aws:organizations::188206870753:ou/o-980c72tm8e/ou-o8tt-rn48gyv3, arn:aws:organizations::188206870753:ou/o-980c72tm8e/ou-o8tt-7cu9j0xy, arn:aws:organizations::188206870753:ou/o-980c72tm8e/ou-o8tt-ph9mxujn
+
+Resources:
+    ImageBuilderImagePipeline:
+        Type: "AWS::ImageBuilder::ImagePipeline"
+        DependsOn:
+          - ImageBuilderImageRecipe
+          - ImageBuilderDistributionConfiguration
+        Properties:
+            Name: "CentOS_8_Golden"
+            Description: "CentOS_8_Golden Pipeline"
+            ImageRecipeArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:image-recipe/centos-8-golden/1.0.0"
+            InfrastructureConfigurationArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:infrastructure-configuration/linux-infrastructure-golden"
+            DistributionConfigurationArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:distribution-configuration/centos-8-golden"
+            ImageTestsConfiguration: 
+                ImageTestsEnabled: true
+                TimeoutMinutes: 720
+            Status: "ENABLED"
+            Tags:
+                Purpose: "GoldenImage"
+                Platform: "CentOS8"
+
+    ImageBuilderImageRecipe:
+        Type: "AWS::ImageBuilder::ImageRecipe"
+        Properties:
+            Name: !Ref ImageBuilderImageRecipeName
+            Description: "CentOS_8_Golden Image Recipe"
+            Version: !Ref ImageRecipeVersion
+            Components: 
+              - 
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:aws:component/update-linux/1.0.1/1"
+              - 
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:aws:component/aws-cli-version-2-linux/x.x.x"
+              - 
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:component/cb-psc-sensor-agent/x.x.x"
+              - 
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:component/qualys-cloud-agent/x.x.x"
+              - 
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:aws:component/amazon-cloudwatch-agent-linux/x.x.x"
+              -
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:component/misc-postrun-scripts/x.x.x"
+              - 
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:aws:component/reboot-test-linux/x.x.x"
+              - 
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:aws:component/simple-boot-test-linux/x.x.x"
+            ParentImage: !Sub "arn:aws:imagebuilder:${AWS::Region}:aws:image/centos-linux-8-x86/x.x.x"
+            BlockDeviceMappings: 
+              - 
+                DeviceName: "/dev/sda1"
+                Ebs: 
+                    DeleteOnTermination: true
+                    Encrypted: true
+                    KmsKeyId: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:${EBSEncryptionKey}"
+                    VolumeSize: 10
+                    VolumeType: "gp2"
+            Tags: 
+                Purpose: "GoldenImage"
+                Platform: "CentOS8"
+
+    ImageBuilderDistributionConfiguration:
+        Type: "AWS::ImageBuilder::DistributionConfiguration"
+        Properties:
+            Name: !Ref ImageBuilderDistributionConfigurationName
+            Description: "CentOS_8_Golden Distribution"
+            Distributions: 
+              - 
+                Region: !Ref AWS::Region
+                AmiDistributionConfiguration: 
+                    Name: "CentOS_8_Golden {{imagebuilder:buildDate}}"
+                    Description: "CentOS_8_Golden Distribution"
+                    LaunchPermissionConfiguration: 
+                        OrganizationalUnitArns: !Ref OrganizationalUnitARNS
+            Tags:
+                Purpose: "GoldenImage"
+                Platform: "CentOS8"

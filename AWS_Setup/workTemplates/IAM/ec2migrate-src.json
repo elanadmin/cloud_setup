@@ -1,0 +1,131 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "AWS CloudFormation template for IAM Roles and Policies for SecurityGroup and Tags Migration.",
+    "Parameters": {
+        "DstAccountID": {
+            "Description": "Destination AccountID where Role to be Assumed By SRCAcUser",
+            "Type": "String",
+            "Default": "558420267243"
+        },
+        "SRCAcUser": {
+            "Description": "Source Account IAM User needs to Assume Destination Role",
+            "Type": "String",
+            "Default": "ec2migrate"
+        },
+        "SRCAcPolicy": {
+            "Description": "Source Account IAM PolicyName",
+            "Type": "String",
+            "Default": "ec2migrate"
+        },
+        "SRCAcRole": {
+            "Description": "Source Account IAM Role",
+            "Type": "String",
+            "Default": "ec2migrate"
+        },
+        "DstAcRole": {
+            "Description": "Destination Account IAM Role",
+            "Type": "String",
+            "Default": "ec2migrate"
+        }
+    },
+    "Resources": {
+        "SrcIAMRole": {
+            "Type": "AWS::IAM::Role",
+            "DependsOn" : "SrcIAMUser",
+            "Properties": {
+                "RoleName": { "Ref" : "SRCAcRole" },
+                "Description" : "IAM Role to Migrate SecurityGroups and Tags from Src Account.",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": [
+                                    { 
+                                        "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${SRCAcUser}"
+                                    }
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": { "Ref" : "SRCAcPolicy" },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "EC2Actions",
+                                    "Action": [
+                                        "ec2:AuthorizeSecurityGroupIngress",
+                                        "ec2:DescribeInstances",
+                                        "ec2:DescribeInstanceAttribute",
+                                        "ec2:DescribeSpotInstanceRequests",
+                                        "ec2:UpdateSecurityGroupRuleDescriptionsIngress",
+                                        "ec2:DescribeVolumeStatus",
+                                        "ec2:DescribeInstanceTypeOfferings",
+                                        "ec2:CreateSecurityGroup",
+                                        "ec2:DescribeVolumes",
+                                        "ec2:DescribeReservedInstances",
+                                        "ec2:DescribeReservedInstancesListings",
+                                        "ec2:DescribeInstanceStatus",
+                                        "ec2:AuthorizeSecurityGroupEgress",
+                                        "ec2:UpdateSecurityGroupRuleDescriptionsEgress",
+                                        "ec2:DescribeIamInstanceProfileAssociations",
+                                        "ec2:DescribeReservedInstancesOfferings",
+                                        "ec2:DescribeReplaceRootVolumeTasks",
+                                        "ec2:ModifySecurityGroupRules",
+                                        "ec2:DescribeVolumeAttribute",
+                                        "ec2:DescribeSecurityGroups",
+                                        "ec2:DescribeSecurityGroupRules",
+                                        "ec2:DescribeSecurityGroupReferences",
+                                        "ec2:DescribeInstanceTypes",
+                                        "ec2:DescribeReservedInstancesModifications",
+                                        "ec2:DescribeStaleSecurityGroups"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "SrcIAMUser": {
+            "Type" : "AWS::IAM::User",
+            "Properties" : {
+                "ManagedPolicyArns" : [
+                    "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+                ],
+                "UserName" : { "Ref" : "SRCAcUser" },
+                "Path" : "/",
+                "Policies" : [
+                    {
+                        "PolicyName": "crossrole-ec2migrate",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "sts:AssumeRole",
+                                    "Resource": [
+                                        {
+                                        "Fn::Sub": "arn:aws:iam::${DstAccountID}:role/${DstAcRole}"
+                                        }   
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}

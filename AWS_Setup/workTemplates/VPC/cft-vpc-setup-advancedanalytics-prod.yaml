@@ -1,0 +1,521 @@
+Description:  This template deploys a VPC, with six private subnets and private Endpoints.
+Metadata:
+  Template:
+    Version: "1.0"
+
+Parameters:
+  VPCName:
+    Description: Name of the VPC. 
+    Type: String
+    Default: advanced-analytics-prod
+    
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC.
+    Type: String
+    Default: 10.95.136.0/22
+  
+  VpcMainRouteTableID:
+    Description: Please enter the Main Route TableID for this VPC.
+    Type: String
+    Default: " "
+
+  PrefixSubName1:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: advanced-analytics-prod
+
+  PrivateSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet PrivateSubnet1.
+    Type: String
+    Default: 10.95.136.0/25
+
+  PrivateSubnet1Type:
+    Description: Please enter the purpose of private subnet PrivateSubnet1.
+    Type: String
+    Default: " "
+    AllowedValues: ["-apps", "-emr", "-internet", " "] 
+
+  PrivateSubnet1AZ:
+    Description: Please enter the AZ of private subnet for PrivateSubnet1.
+    Type: String
+    Default: us-east-1a
+
+  PrefixSubName2:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: advanced-analytics-prod
+
+  PrivateSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet PrivateSubnet2.
+    Type: String
+    Default: 10.95.136.128/25
+
+  PrivateSubnet2Type:
+    Description: Please enter the purpose of private subnet PrivateSubnet2.
+    Type: String
+    Default: " "
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PrivateSubnet2AZ:
+    Description: Please enter the AZ of private subnet for PrivateSubnet2.
+    Type: String
+    Default: us-east-1b
+
+  PrefixSubName3:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: advanced-analytics-prod
+
+  PrivateSubnet3CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet PrivateSubnet3.
+    Type: String
+    Default: 10.95.137.0/25
+
+  PrivateSubnet3Type:
+    Description: Please enter the purpose of private subnet PrivateSubnet3.
+    Type: String
+    Default: " "
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PrivateSubnet3AZ:
+    Description: Please enter the AZ of private subnet for PrivateSubnet3.
+    Type: String
+    Default: us-east-1c
+
+  PrefixSubName4:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: advanced-analytics-prod
+
+  PrivateSubnet4CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet PrivateSubnet4.
+    Type: String
+    Default: 10.95.137.128/25
+
+  PrivateSubnet4Type:
+    Description: Please enter the purpose of private subnet PrivateSubnet4.
+    Type: String
+    Default: " "
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PrivateSubnet4AZ:
+    Description: Please enter the AZ of private subnet for PrivateSubnet4.
+    Type: String
+    Default: us-east-1d
+
+  PrefixSubName5:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: advanced-analytics-prod
+
+  PrivateSubnet5CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet PrivateSubnet5.
+    Type: String
+    Default: 10.95.138.0/25
+
+  PrivateSubnet5Type:
+    Description: Please enter the purpose of private subnet PrivateSubnet5.
+    Type: String
+    Default: " "
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PrivateSubnet5AZ:
+    Description: Please enter the AZ of private subnet for PrivateSubnet5.
+    Type: String
+    Default: us-east-1e
+  
+  PrefixSubName6:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: advanced-analytics-prod
+
+  PrivateSubnet6CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet PrivateSubnet6.
+    Type: String
+    Default: 10.95.138.128/25
+
+  PrivateSubnet6Type:
+    Description: Please enter the purpose of private subnet PrivateSubnet6.
+    Type: String
+    Default: " "
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PrivateSubnet6AZ:
+    Description: Please enter the AZ of private subnet for PrivateSubnet6.
+    Type: String
+    Default: us-east-1f
+  
+  CreateIGW:
+    Description: Please Select if Internet Gateway is Required. 
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+
+  CreateIGWRoute:
+    Description: Please Select if Internet Gateway Routes are Required in Public Subnet Route Table. 
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+  
+  CreateS3EP:
+    Description: Please Select if S3 Gateway EndPoint is Required. 
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+
+  CreateAGWEP:
+    Description: Please Select if API Gateway Interface EndPoint is Required. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+  
+  CreateSMEP:
+    Description: Please Select if SecretsManager Interface EndPoint is Required. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+  
+  CreateSSMEP:
+    Description: Please Select if SSM Interface EndPoint is Required. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+  
+  CreateSSMMEP:
+    Description: Please Select if SSM Messages Interface EndPoint is Required. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+  
+  CreateEC2MEP:
+    Description: Please Select if EC2 Messages Interface EndPoint is Required. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+
+  CreateDDEP:
+    Description: Please Select if DynamoDB Gateway EndPoint is Required. 
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+
+  CreateKMSEP:
+    Description: Please Select if KMS Interface EndPoint is Required. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+
+  CreateSTSEP:
+    Description: Please Select if STS Interface EndPoint is Required. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+
+  CreateSNSEP:
+    Description: Please Select if SNS Interface EndPoint is Required. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+
+Conditions:
+  CreateIGW: !Equals
+    - !Ref CreateIGW
+    - true
+
+  CreateIGWRoute: !Equals
+    - !Ref CreateIGWRoute
+    - true
+
+  CreateS3EP: !Equals
+    - !Ref CreateS3EP
+    - true
+
+  CreateAGWEP: !Equals
+    - !Ref CreateAGWEP
+    - true
+
+  CreateSMEP: !Equals
+    - !Ref CreateSMEP
+    - true
+
+  CreateSSMEP: !Equals
+    - !Ref CreateSSMEP
+    - true
+
+  CreateSSMMEP: !Equals
+    - !Ref CreateSSMMEP
+    - true
+
+  CreateEC2MEP: !Equals
+    - !Ref CreateEC2MEP
+    - true
+
+  CreateDDEP: !Equals
+    - !Ref CreateDDEP
+    - true
+  
+  CreateKMSEP: !Equals
+    - !Ref CreateKMSEP
+    - true
+  
+  CreateSTSEP: !Equals
+    - !Ref CreateSTSEP
+    - true
+  
+  CreateSNSEP: !Equals
+    - !Ref CreateSNSEP
+    - true
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${VPCName}
+  
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PrivateSubnet1AZ
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName1}${PrivateSubnet1Type}-${PrivateSubnet1AZ}
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PrivateSubnet2AZ
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName2}${PrivateSubnet2Type}-${PrivateSubnet2AZ}
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PrivateSubnet3AZ
+      CidrBlock: !Ref PrivateSubnet3CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName3}${PrivateSubnet3Type}-${PrivateSubnet3AZ}
+
+  PrivateSubnet4:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PrivateSubnet4AZ
+      CidrBlock: !Ref PrivateSubnet4CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName4}${PrivateSubnet4Type}-${PrivateSubnet4AZ}
+
+  PrivateSubnet5:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PrivateSubnet5AZ
+      CidrBlock: !Ref PrivateSubnet5CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName5}${PrivateSubnet5Type}-${PrivateSubnet5AZ}
+
+  PrivateSubnet6:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PrivateSubnet6AZ
+      CidrBlock: !Ref PrivateSubnet6CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName6}${PrivateSubnet6Type}-${PrivateSubnet6AZ}
+  
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: CreateIGW
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+    Condition: CreateIGW
+  
+  S3Endpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Condition: CreateS3EP
+    Properties:
+      RouteTableIds:
+        - !Ref VpcMainRouteTableID
+      VpcEndpointType: Gateway
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcId: !Ref VPC
+
+  AGWEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Condition: CreateAGWEP
+    Properties:
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+        - !Ref PrivateSubnet4
+        - !Ref PrivateSubnet5
+        - !Ref PrivateSubnet6
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.execute-api'
+      VpcId: !Ref VPC
+  
+  SMEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Condition: CreateSMEP
+    Properties:
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+        - !Ref PrivateSubnet4
+        - !Ref PrivateSubnet5
+        - !Ref PrivateSubnet6
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.secretsmanager'
+      VpcId: !Ref VPC
+  
+  SSMEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Condition: CreateSSMEP
+    Properties:
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+        - !Ref PrivateSubnet4
+        - !Ref PrivateSubnet5
+        - !Ref PrivateSubnet6
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
+      VpcId: !Ref VPC
+
+  SSMMEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Condition: CreateSSMMEP
+    Properties:
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+        - !Ref PrivateSubnet4
+        - !Ref PrivateSubnet5
+        - !Ref PrivateSubnet6
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
+      VpcId: !Ref VPC
+  
+  EC2MEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Condition: CreateEC2MEP
+    Properties:
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+        - !Ref PrivateSubnet4
+        - !Ref PrivateSubnet5
+        - !Ref PrivateSubnet6
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
+      VpcId: !Ref VPC
+
+  DDEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Condition: CreateDDEP
+    Properties:
+      RouteTableIds:
+        - !Ref VpcMainRouteTableID
+      VpcEndpointType: Gateway
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.dynamodb'
+      VpcId: !Ref VPC
+
+  KMSEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Condition: CreateKMSEP
+    Properties:
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+        - !Ref PrivateSubnet4
+        - !Ref PrivateSubnet5
+        - !Ref PrivateSubnet6
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.kms'
+      VpcId: !Ref VPC
+
+  STSEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Condition: CreateSTSEP
+    Properties:
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+        - !Ref PrivateSubnet4
+        - !Ref PrivateSubnet5
+        - !Ref PrivateSubnet6
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.sts'
+      VpcId: !Ref VPC
+  
+  SNSEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Condition: CreateSNSEP
+    Properties:
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+        - !Ref PrivateSubnet4
+        - !Ref PrivateSubnet5
+        - !Ref PrivateSubnet6
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.sns'
+      VpcId: !Ref VPC

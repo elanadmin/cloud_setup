@@ -1,0 +1,151 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation Stack Template to Create ResourceGroup using EC2 Instance Filter with Tags for Linux EC2 Patching.
+
+Parameters:
+  RGName:
+    Type: String
+    Default: Eiger-Linux-EC2-Patching
+    Description: >-
+      "ResourceGroup Name and PatchGroup Tag Value:"
+    AllowedValues:
+      - "Eiger-Linux-EC2-Patching"
+      - "Eiger-Linux-EC2-Patching-NoReboot"
+      - "Eiger-Linux-EC2-Patching-Primary"
+      - "Eiger-Linux-EC2-Patching-Secondary"
+      - "Eiger-Linux-EC2-Patching-Critical"
+      - "Eiger-Linux-EC2-Patching-NonCritical"
+
+  NoRebootRGName:
+    Type: String
+    Default: Eiger-Linux-EC2-Patching-NoReboot
+    Description: >-
+      "NoReboot ResourceGroup Name and PatchGroup Tag Value:"
+    AllowedValues:
+      - "Eiger-Linux-EC2-Patching"
+      - "Eiger-Linux-EC2-Patching-NoReboot"
+      - "Eiger-Linux-EC2-Patching-Primary"
+      - "Eiger-Linux-EC2-Patching-Secondary"
+      - "Eiger-Linux-EC2-Patching-Critical"
+      - "Eiger-Linux-EC2-Patching-NonCritical"
+
+Mappings:
+  defaultNetworkParamsMap:
+    '601697125460':
+      defaultVPCId: vpc-08ad0ce9607e6ca4a
+      defaultSubnetId: subnet-045f2e0f09f1cb6e7
+    '810234045291':
+      defaultVPCId: vpc-0ff4cd0d89ec44c9d
+      defaultSubnetId: subnet-0e1fa7431564fcb02
+    '744295199755':
+      defaultVPCId: vpc-0e742a8dd0f517ff8
+      defaultSubnetId: subnet-07eae2708b28a51af
+    '651154789300':
+      defaultVPCId: vpc-0a3e778af80e18b56
+      defaultSubnetId: subnet-0696fa9a18352b8b7
+    '736200147754':
+      defaultVPCId: vpc-086a314e5a33f869e
+      defaultSubnetId: subnet-0254ac71f12fbac64
+    '721178831155':
+      defaultVPCId: vpc-0eb321d6128b20185
+      defaultSubnetId: subnet-0ee7996f926d2e974
+    '655538274560':
+      defaultVPCId: TBD
+      defaultSubnetId: TBD
+    '717711644138':
+      defaultVPCId: vpc-043bf3e230fc677e9
+      defaultSubnetId: subnet-0df34a4dabfc1d39e
+    '605989421757':
+      defaultVPCId: vpc-0dd8a4485b9768ebc
+      defaultSubnetId: subnet-0a44b8dab19ca3fc0
+    '884506673723':
+      defaultVPCId: vpc-0a018ee9d75173d35
+      defaultSubnetId: subnet-0ee2c1426f5e86b7c
+    '005547792680':
+      defaultVPCId: vpc-02db999feb585d64f
+      defaultSubnetId: subnet-07d62370f9c66dc80
+    '819521353958':
+      defaultVPCId: vpc-0bb8087bc8a998fce
+      defaultSubnetId: subnet-0106a85d2286f6f40
+    '169523143400':
+      defaultVPCId: vpc-0923fd2d87727a89f
+      defaultSubnetId: subnet-041cea47b61adb897
+    '054172767459':
+      defaultVPCId: vpc-042c489c54ba67956
+      defaultSubnetId: subnet-0d7010192f81924b6
+    '311927990054':
+      defaultVPCId: vpc-022eebb21f569e280
+      defaultSubnetId: subnet-0a7486d770d9f0d32
+    
+Resources:
+  TagBasedResourceGroup:
+    Type: "AWS::ResourceGroups::Group"
+    Properties:
+      Name: !Ref RGName
+      Description: "EC2 Instances for Linux Security Patching managed by Cloud and Automation Team with AWS SSM Automation."
+      ResourceQuery:
+        Type:
+          "TAG_FILTERS_1_0" 
+        Query:
+          ResourceTypeFilters: 
+            - "AWS::EC2::Instance" 
+          TagFilters:
+            - Key: "PatchGroup" 
+              Values:
+                - !Ref RGName
+            
+            - Key: "Patching"
+              Values:
+                - "Yes"
+              
+            - Key: "Platform" 
+              Values:
+                - "Linux"
+
+  NoRebootTagBasedResourceGroup:
+    Type: "AWS::ResourceGroups::Group"
+    Properties:
+      Name: !Ref NoRebootRGName
+      Description: "EC2 Instances with No Reboot i.e like AutoScaling Instances e.t.c for Linux Security Patching managed by Cloud and Automation Team with AWS SSM Automation."
+      ResourceQuery:
+        Type:
+          "TAG_FILTERS_1_0" 
+        Query:
+          ResourceTypeFilters: 
+            - "AWS::EC2::Instance" 
+          TagFilters:
+            - Key: "PatchGroup" 
+              Values:
+                - !Ref NoRebootRGName
+            
+            - Key: "Patching"
+              Values:
+                - "Yes"
+              
+            - Key: "Platform" 
+              Values:
+                - "Linux"
+
+#  ImportAMIPatchTestKeyPair:
+#    Type: AWS::EC2::KeyPair
+#    Properties:
+#      KeyName: InfraAMIPatchTestKP
+#      KeyType: rsa
+#      PublicKeyMaterial: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCjhKjo1kKSH2GZnkqrF7q5jgafvnpWB7U/dWyamxxjlg51z/oyVLXGUDMXTojmH3Xd7VscVxR/vT5y4mZDmHZgVbxBI1JrfnJqUSE+zA9g0KkmayH1U4Pr/vmM4qm7I7DCzcDfNdmF5S4fu4RGkwn06wKXep1MXbKBM7WvbLTuVv+aQ05z13xF7kk2Jads3i8Gh4i2gjQfZeUn/daEpSlh1CZEOIuFLTv9vyyeutWA1ZCVZaxLJ0CugXn/qThc+R+7Ss3AvrvOu3RTLDKiLFqXVjZGV/FJQDm6hY8szD7DGaBe9g6V0KkkeviKUm5E2kCohRnqmMv74U4EVa1rR1Jn ec2imagebuilder-eiger"
+    
+  defaultVPCId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: defaultVPCId
+      Type: String
+      Value: !FindInMap [defaultNetworkParamsMap, !Ref "AWS::AccountId", defaultVPCId]
+      Description: SSM Parameter for defaultVPCId
+      AllowedPattern: "^vpc-[a-zA-Z0-9]{15,20}$"
+
+  defaultSubnetId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: defaultSubnetId
+      Type: String
+      Value: !FindInMap [defaultNetworkParamsMap, !Ref "AWS::AccountId", defaultSubnetId]
+      Description: SSM Parameter for defaultSubnetId
+      AllowedPattern: "^subnet-[a-zA-Z0-9]{15,20}$"

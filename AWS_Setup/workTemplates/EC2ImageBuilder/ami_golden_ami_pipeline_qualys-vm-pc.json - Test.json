@@ -1,0 +1,1950 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": " This cloudformation template creates resources required to set up a golden ami pipeline.",
+
+    "Parameters": {
+
+      "imageBuilderBucket": {
+             "Type": "String",
+             "Default": "ec2imagebuilder-eiger-infra",
+             "Description": "EC2 ImageBuilder Exisiting S3 Bucket"
+           },
+      "MasterAccountID": {
+             "Type": "String",
+             "Default": "188206870753",
+             "Description": "Please Enter AWS Master AccountID"
+           }, 
+      "ShareAMIto": {
+            "Type": "String",
+            "Default": "Organization",
+            "Description": "Please Select ShareAMI to Organiation or Account",
+            "AllowedValues": [
+                "Organization",
+                "Account"
+              ]
+          },
+      "debugQualysAssesment": {
+             "Type": "String",
+             "Default": "false",
+             "Description": "Please Select if Qualys Assesment Shell Script Run Debug is Required"
+           },
+      "qualysUsername": {
+             "Type": "String",
+             "Default": "qualys",
+             "Description": "Please enter the qualys Username for the Qualys agent which will be installed on your AMI for assessment. You get to override this later by editing the SSM parameter "
+           },
+      "qualysPassword": {
+             "Type": "String",
+             "Default": "qualys",
+             "NoEcho": "true",
+             "Description": "Please enter the qualys Password for the Qualys agent which will be installed on your AMI for assessment. You get to override this later by editing the SSM parameter "
+            },
+      "qualysEc2Connector": {
+              "Type": "String",
+              "Default": "AWS_Infrastructure",
+              "Description": "Please enter the Qualys EC2 Connector Name for the AWS account that will be used for the Golden AMI Pipeline VPC "
+            },
+      "qualysEc2ConnectorId": {
+              "Type": "String",
+              "Default": "20558074761364",
+              "Description": "Please enter the Qualys EC2 Connector ID for the AWS account that will be used for the Golden AMI Pipeline VPC "
+            },
+      "sshKeyName": {
+              "Type": "String",
+              "Default": "qualys_auth_scan",
+              "Description": "Please enter the SSH Key name that will be used for the Golden AMI Pipeline VPC and Qualys authentication record"
+            },
+      "sshKeyMaterial": {
+              "Type": "String",
+              "Default": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCkNqJmXhl7KzmnXHFUZa5IIDvBGX94HVSy+0OyqN2mvkbSfC+9rZOAn2aq419WOlddrz7YTDzb7rsWA6vnDD0rma0keYo9iWJfRaw89SMugYCutmbTpEhlFiYNWBzpaAfGFDpKvzMunH/WVJzHmL8/GjySDWRCg/jxcsgK0E67hJsem/m3oanT3LcruwFyQz5zk5sKc4c1aHhcxVLi8LQl0OKMrtBPUImzF4tzJJXNk0J1CrKBK4PrCM0GHGBl5sL/Ue01c36RkT/R9tEHDrUiUvLJhHokggqOoQzziAur680b1NldlMTksnSNqbDmo/z2SY/asmbUZtmkremmM4Qr ssm-user@qualys",
+              "Description": "Please enter the SSH PubKey Material that will be used for the Golden AMI Pipeline VPC and Qualys authentication record"
+            },
+      "qualysScanner": {
+                "Type": "String",
+                "Default": "aws_scanner_infrastructure",
+                "Description": "Please enter the qualys Scanner Name for the Qualys agent which will be installed on your AMI for assessment. You get to override this later by editing the SSM parameter "
+            },
+      "qualysVmOptionId": {
+                 "Type": "String",
+                 "Default": "410312",
+                 "Description": "Please enter the VM Option Profile ID used for running the Qualys Vulnerability assessment. You get to override this later by editing the SSM parameter "
+            },
+      "qualysRunPcScan": {
+                "Type": "String",
+                "Default": "YES",
+                "Description": "Please specify whether to run Qualys Compliance Scans in your Golden AMI Pipeline, if YES, then you must specify a PC Option ID. You get to override this later by editing the SSM parameter ",
+                "AllowedValues": [
+                  "YES",
+                  "NO"
+                ]
+            },
+      "qualysPCOptionId": {
+                "Type": "String",
+                "Default": "1657781",
+                "Description": "Please enter the Qualys PC OptionId for the Qualys agent which will be installed on your AMI for assessment. You get to override this later by editing the SSM parameter "
+            },
+      "qualysParentTagId": {
+                "Type": "String",
+                "Default": "55120293",
+                "Description": "Please enter the Qualys Parent Tag ID for the Golden AMI Pipeline Parent Tag in Qualys Asset View "
+            },
+      "qualysApiUrl": {
+               "Default": "https://qualysapi.qg2.apps.qualys.com",
+               "Description": "Your Qualys URL for accessing API",
+               "Type": "String"
+            },
+      "instanceTag": {
+                "Default": "EC2_GOLDEN_AMI",
+                "Description": "Qualys Assesment Instance Tag",
+                "Type": "String"
+             },
+      "productName": {
+              "Type": "String",
+              "Default": "ProductName-ProductVersion",
+              "Description": "ProductName-ProductVersion combination of the product for which you intend to use the pipeline. You get to override this later when you trigger automation workflow. "
+            },
+      "productOSAndVersion": {
+            "Type": "String",
+            "Default": "OperatingSystemName-OperatingSystemVersion",
+            "Description": "Operating system name and OS version. You get to override this later when you trigger automation workflow."
+            },
+      "buildVersion": {
+            "Type": "String",
+            "Default": "1",
+            "Description": "Build-Version corresponding to your product. Note - This is just a default value, you get to override this later when you trigger automation workflow."
+            },
+
+      "VpcId": {
+            "Type": "String",
+            "Default": "vpc-0923fd2d87727a89f",
+            "Description": "VPC in which GoldenAMI AutoScan Instance wil be launched to."
+            },
+      
+      "SubnetId": {
+            "Type": "String",
+            "Default": "subnet-041cea47b61adb897",
+            "Description": "VPC SubnetId in which GoldenAMI AutoScan Instance wil be launched to."
+            },
+
+      "approverUserIAMARN": {
+            "Type": "String",
+            "Default": "arn:aws:iam::169523143400:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_Role_AWS_Enterprise_CloudEng_9262f8e1831fd37e,arn:aws:iam::169523143400:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_Role_AWS_Enterprise_CloudAdmin_9daeac454a8ea6c8",
+            "Description": "IAM ARN of the Golden AMI approver. The approver must have AmazonSSMAutomationApproverAccess policy associated with it's IAM Profile ."
+            },
+
+      "EmailID": {
+            "Type": "String",
+            "Default": "tulasi.lakshmi@eigersolutions.com",
+            "AllowedPattern": "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)",
+            "Description": "Your email ID for receiving Qualys assessment results and golden AMI creation notification."
+            },
+
+      "instanceType": {
+            "Type": "String",
+            "Default": "t3.medium",
+            "Description": "Specify the the InstanceType compatible with all your golden AMIs. This InstanceType will be used for launching continuous vulnerability assessment of golden AMIs."
+            },
+
+      "continuousInspectionFrequency": {
+            "Type": "String",
+            "Default": "rate(1 day)",
+            "Description": "Frequency for setting up continuous inspection of your AMIs. For syntax, check - https://docs.aws.amazon.com/lambda/latest/dg/tutorial-scheduled-events-schedule-expressions.html"
+            },
+
+      "MetadataJSON":{
+            "Type":"String",
+            "Default": "{\\\"o-980c72tm8e\\\":\\\"us-east-1\\\"}",
+            "Description": "Metadata of accounts/orgID and regions for distributing the golden AMI."
+            },
+
+      "roleName":{
+            "Type":"String",
+            "Default":"goldenAMICrossAccountRole",
+            "Description": "Cross account role suffix for managing Golden AMI metadata Parameters in child account(s). This role needs to exist in each account specified in MetadataJSON parameter."
+            },
+
+      "iamrolepb":{
+            "Type":"String",
+            "Default":"SEPermissionBoundary",
+            "Description": "Default IAM Role Permisssion Boundary"
+            },
+
+      "qualysActivationID": {
+            "Default": "cef74b00-6607-4b1b-bea8-ee3fca8d0687",
+            "Description": "Your Qualys Cloud Agent Activation ID",
+            "Type": "String"
+            },
+
+      "qualysCustomerID": {
+            "Default": "e76a2f4e-d6af-e59c-82c6-a64e3ad45856",
+            "Description": "Your Qualys Cloud Agent Customer ID",
+            "Type": "String"
+            },
+
+      "qualysQcaLogLevel": {
+            "Type": "String",
+            "Default": "0",
+            "Description": "(Optional)  A higher value corresponds to more verbosity. Default is to report only errors (0) ",
+            "AllowedValues": [
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5"
+            ]
+        }
+    },
+
+    "Resources": {    
+      "ImportedKeyPair": {
+         "Type": "AWS::EC2::KeyPair",
+         "Properties": {
+            "KeyName": {"Ref":"sshKeyName"},
+            "PublicKeyMaterial": {"Ref":"sshKeyMaterial"}
+         }
+      },
+
+      "DebugQualysAssesment": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/DebugQualysAssesment",
+            "Type": "String",
+            "Value": {"Ref":"debugQualysAssesment"},
+            "Description": "SSM Parameter for Qualys Assesment Debug."
+          }
+      },
+
+      "ApproverUserIAMARN": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/ApproverUserIAMARN",
+            "Type": "StringList",
+            "Value": {"Ref":"approverUserIAMARN"},
+            "Description": "SSM Parameter for ApproverUserIAMARN."
+         }
+      },
+
+      "QualysUsername": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysUsername",
+            "Type": "String",
+            "Value": {"Ref":"qualysUsername"},
+            "Description": "SSM Parameter for Qualys Username."
+         }
+      },
+
+      "QualysPassword": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysPassword",
+            "Type": "String",
+            "Value": {"Ref":"qualysPassword"},
+            "Description": "SSM Parameter for Qualys Password."
+         }
+
+      },
+
+      "QualysEc2Connector": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysEc2ConnectorName",
+            "Type": "String",
+            "Value": {"Ref":"qualysEc2Connector"},
+            "Description": "SSM Parameter for Qualys EC2 Connector."
+         }
+      },
+
+      "QualysEc2ConnectorId": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysEc2ConnectorId",
+            "Type": "String",
+            "Value": {"Ref":"qualysEc2ConnectorId"},
+            "Description": "SSM Parameter for Qualys EC2 Connector ID."
+         }
+      },
+
+      "SSHKeyName": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/SSHKeyName",
+            "Type": "String",
+            "Value": {"Ref":"sshKeyName"},
+            "Description": "SSM Parameter for Qualys EC2 Connector."
+         }
+      },
+
+      "QualysScannerName": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysScannerName",
+            "Type": "String",
+            "Value": {"Ref":"qualysScanner"},
+            "Description": "SSM Parameter for Qualys Scanner Name."
+         }
+      },
+
+      "QualysVmOptionId": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysVmOptionId",
+            "Type": "String",
+            "Value": {"Ref":"qualysVmOptionId"},
+            "Description": "SSM Parameter for Qualys Option ID."
+         }
+      },
+
+      "QualysRunPcScan": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysRunPcScan",
+            "Type": "String",
+            "Value": {"Ref":"qualysRunPcScan"},
+            "Description": "SSM Parameter for Qualys PC Enabled in GAP."
+         }
+      },
+
+      "QualysPCOptionId": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysPCOptionId",
+            "Type": "String",
+            "Value": {"Ref":"qualysPCOptionId"},
+            "Description": "SSM Parameter for Qualys PC Option ID."
+         }
+      },
+
+      "QualysParentTagId": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysParentTagId",
+            "Type": "String",
+            "Value": {"Ref":"qualysParentTagId"},
+            "Description": "SSM Parameter for Qualys Parent Tag ID"
+         }
+      },
+
+      "QualysQcaActivationID": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysQcaActivationID",
+            "Type": "String",
+            "Value": {"Ref":"qualysActivationID"},
+            "Description": "SSM Parameter for Qualys QCA Activation ID"
+         }
+      },
+
+      "QualysQcaCustomerID": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysQcaCustomerID",
+            "Type": "String",
+            "Value": {"Ref":"qualysCustomerID"},
+            "Description": "SSM Parameter for Qualys QCA Customer ID"
+         }
+      },
+
+      "QualysQcaLogLevel": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "/GoldenAMI/Qualys/QualysQcaLogLevel",
+            "Type": "String",
+            "Value": {"Ref":"qualysQcaLogLevel"},
+            "Description": "(Optional)  A higher value corresponds to more verbosity. Default is to report only errors (0) "
+         }
+      },
+
+      "GoldenAMIConfigBucket": {
+        "Type": "AWS::S3::Bucket",
+        "Properties": {
+            "VersioningConfiguration": {
+                "Status": "Enabled"
+            },
+            "BucketEncryption":
+            {
+              "ServerSideEncryptionConfiguration" : [{
+              "ServerSideEncryptionByDefault" : {"SSEAlgorithm":"AES256"}
+              }]
+            }
+         }
+      },
+
+      "GoldenAmiConfigBucketPolicy": {
+                  "Type": "AWS::S3::BucketPolicy",
+                  "DependsOn": [
+                    "ManagedInstanceRole",
+                    "AutomationServiceRole"
+                  ],
+                  "Properties": {
+                      "Bucket": {
+                          "Ref": "GoldenAMIConfigBucket"
+                      },
+                      "PolicyDocument": {
+                          "Statement": [
+                              {
+                                  "Action": [
+                                      "s3:*"
+                                  ],
+                                  "Effect": "Allow",
+                                  "Resource": [
+                                      {
+                                          "Fn::Join": [
+                                              "",
+                                              [
+                                                  "arn:aws:s3:::",
+                                                  {
+                                                      "Ref": "GoldenAMIConfigBucket"
+                                                  },
+                                                  "/*"
+                                              ]
+                                          ]
+                                      },
+                                      {
+                                          "Fn::Join": [
+                                              "",
+                                              [
+                                                  "arn:aws:s3:::",
+                                                  {
+                                                      "Ref": "GoldenAMIConfigBucket"
+                                                  }
+                                              ]
+                                          ]
+                                      }
+                                  ],
+                                  "Principal": {
+                                      "AWS": [
+                                          {
+                                              "Fn::GetAtt": [
+                                                  "ManagedInstanceRole",
+                                                  "Arn"
+                                              ]
+                                          },
+                                          {
+                                              "Fn::GetAtt": [
+                                                  "AutomationServiceRole",
+                                                  "Arn"
+                                              ]
+                                          }
+                                      ]
+                                  }
+                              }
+                          ]
+                      }
+                  }
+              },
+
+      "SSMConfigPolicy": {
+                "Type": "AWS::IAM::Policy",
+                "DependsOn": "ManagedInstanceRole",
+                "Properties": {
+                   "PolicyName": "SSM-Policy",
+                   "PolicyDocument": {
+                      "Version" : "2012-10-17",
+                      "Statement": [
+                         { "Effect": "Allow", "Action": "ssm:*", "Resource": "arn:aws:ssm:*:*:parameter/*" }
+                      ]
+                   },
+                   "Roles": [ { "Ref": "ManagedInstanceRole" } ]
+                }
+              },
+
+      "PublishAMILambdaRole": {
+                "Type": "AWS::IAM::Role",
+                "Properties": {
+                    "PermissionsBoundary": { "Fn::Join":
+                    [
+                        "",
+                        [
+                            "arn:aws:iam:",
+                            ":",
+                            {
+                                "Ref":"AWS::AccountId"
+                            },
+                            ":policy/",
+                            { 
+                                "Ref":"iamrolepb" 
+                            }
+                        ]
+                    ]},
+                    "ManagedPolicyArns": [
+                        "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"],
+                    "AssumeRolePolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                            {
+                                "Effect": "Allow",
+                                "Principal": {
+                                    "Service": [
+                                        "lambda.amazonaws.com"
+                                    ]
+                                },
+                                "Action": [
+                                    "sts:AssumeRole"
+                                ]
+                            }
+                        ]
+                    },
+                    "Path": "/",
+                    "Policies": [
+                        {
+                            "PolicyName": "PublishAMILambdaPolicy",
+                            "PolicyDocument": {
+                                "Version": "2012-10-17",
+                                "Statement": [
+                                    {
+                                        "Effect": "Allow",
+                                        "Action": [
+                                            "ssm:GetParameter*"
+                                        ],
+                                        "Resource": { "Fn::Join":
+                                          [
+                                              "",
+                                              [
+                                                  "arn:aws:ssm:", "*",
+                                                  ":",
+                                                  {
+                                                      "Ref":"AWS::AccountId"
+                                                  },
+                                                  ":parameter/GoldenAMI/*"
+                                              ]
+                                          ]}
+                                    },
+                                    {
+                              "Effect": "Allow",
+                              "Action": [
+                                  "s3:GetObject*",
+                                  "s3:PutObject*"],
+                              "Resource": [
+                              { "Fn::Join":["",["arn:aws:s3:::",{"Ref": "GoldenAMIConfigBucket"},"/*"]]
+                              }]
+                        },
+                        {
+                              "Effect": "Allow",
+                              "Action": [
+                                  "servicecatalog:SearchProductsAsAdmin",
+                                  "servicecatalog:CreateProvisioningArtifact",
+                                  "servicecatalog:CreateProduct",
+                                  "cloudformation:ValidateTemplate"
+                                  ],
+                              "Resource": "*"
+                        }
+
+                                ]
+                            }
+                        }
+
+                    ]
+                }
+            },
+
+      "PublishAMILambda": {
+                "Type": "AWS::Lambda::Function",
+                "Properties": {
+                    "Role": {
+                        "Fn::GetAtt": [
+                            "PublishAMILambdaRole",
+                            "Arn"
+                        ]
+                    },
+                    "Code": {
+                        "ZipFile": {
+                            "Fn::Join": [
+                                "\n",
+                                [
+                                    "import boto3",
+                                    "import json",
+                                    "from dateutil import parser",
+                                    "import dateutil",
+                                    "import datetime",
+                                    "import collections",
+                                    "import os",
+                                    "import time",
+                                    "def lambda_handler(event, context):",
+                                    "    sourceRegion = os.environ['AWS_DEFAULT_REGION']",
+                                    "    s3 = boto3.resource('s3')",
+                                    "    prodName=event['productNameAndVersion']",
+                                    "    prodOS=event['productOSAndVersion']",
+                                    "    bucket =event['bucketName']",
+                                    "    s3FilePrefix=event['templateFileName']",
+                                    "    version=event['versionToBeCreated']",
+                                    "    amiRegionMappingParamName =event['amiRegionMappingParamName']",
+                                    "    filepath='/tmp/'+s3FilePrefix",
+                                    "    object=s3.Object(bucket,s3FilePrefix)",
+                                    "    text=object.get()[\"Body\"].read().decode('utf-8') ",
+                                    "    amiIDParamPath = '/GoldenAMI/'+prodOS+'/'+prodName+'/'+event['versionToBeCreated']",
+                                    "    text=text.replace('AMI_ID_TO_REPLACE', amiIDParamPath)",
+                                    "    with open(filepath, mode='w',encoding='utf-8') as file:",
+                                    "        file.write(text)",
+                                    "    s3.meta.client.upload_file(filepath,bucket,s3FilePrefix+'/versions/'+version)",
+                                    "    ssm = boto3.client('ssm',os.environ['AWS_DEFAULT_REGION'])",
+                                    "    amiIDRegionMapping =  ssm.get_parameter(Name=amiRegionMappingParamName)['Parameter']['Value']",
+                                    "    mappingJSON = json.loads(amiIDRegionMapping)",
+                                    "    for region, amiID in mappingJSON.items():",
+                                    "        sc = boto3.client('servicecatalog',region)",
+                                    "        scProduct=''",
+                                    "        products = sc.search_products_as_admin(ProductSource='ACCOUNT')",
+                                    "        for product in products['ProductViewDetails']:",
+                                    "            productName = product['ProductViewSummary']['Name']",
+                                    "            if productName == prodName+'-'+prodOS:    ",
+                                    "                scProduct=product['ProductViewSummary']['ProductId']",
+                                    "                sc.create_provisioning_artifact(ProductId=scProduct,Parameters={'Name': version,'Description': 'This is version '+version,'Info': {'LoadTemplateFromURL': 'https://s3.amazonaws.com/'+bucket+'/'+s3FilePrefix+'/versions/'+version},'Type': 'CLOUD_FORMATION_TEMPLATE'},IdempotencyToken=str(round(time.time() * 1000)))",
+                                    "        if scProduct == '':",
+                                    "            print('SC product not found, creating a product')",
+                                    "            result = sc.create_product(Name=prodName+'-'+prodOS,Owner='CCOE',ProductType='CLOUD_FORMATION_TEMPLATE', Description='This product can be used to launch '+prodName+' in '+prodOS+' environment.', Tags=[{'Key': 'ProductName','Value': prodName+'-'+prodOS}],ProvisioningArtifactParameters={'Name':version,'Description': 'This is version '+version,'Info': {'LoadTemplateFromURL': 'https://s3.amazonaws.com/'+bucket+'/'+s3FilePrefix+'/versions/'+version},'Type': 'CLOUD_FORMATION_TEMPLATE'},IdempotencyToken=str(round(time.time() * 1000)))",
+                                    "    return 'Done';"
+                                ]
+                            ]
+                        }
+                    },
+                    "Runtime": "python3.9",
+                    "Timeout": 300,
+                    "Handler": "index.lambda_handler",
+                    "MemorySize": 512
+                }
+            },
+
+      "ManagedInstanceRole": {
+                  "Type": "AWS::IAM::Role",
+                  "Properties": {
+                    "PermissionsBoundary": { "Fn::Join":
+                    [
+                        "",
+                        [
+                            "arn:aws:iam:",
+                            ":",
+                            {
+                                "Ref":"AWS::AccountId"
+                            },
+                            ":policy/",
+                            { 
+                                "Ref":"iamrolepb" 
+                            }
+                        ]
+                    ]},
+                      "AssumeRolePolicyDocument": {
+                          "Version": "2012-10-17",
+                          "Statement": [
+                              {
+                                  "Effect": "Allow",
+                                  "Principal": {
+                                      "Service": [
+                                          "ssm.amazonaws.com",
+                                          "ec2.amazonaws.com"
+                                      ]
+                                  },
+                                  "Action": "sts:AssumeRole"
+                              }
+                          ]
+                      },
+                      "ManagedPolicyArns": [
+                        "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                      ],
+                      "Path": "/",
+                      "Policies": [
+                          {
+                              "PolicyName": "GoldenAMIAutomationPolicy",
+                              "PolicyDocument": {
+                                  "Version": "2012-10-17",
+                                  "Statement": [
+                                      {
+                                          "Sid": "EC2Tags",
+                                          "Effect": "Allow",
+                                          "Action": [
+                                              "ec2:DescribeImages",
+                                              "ec2:DescribeInstances",
+                                              "ec2:DeleteTags",
+                                              "ec2:DescribeTags",
+                                              "ec2:CreateTags",
+                                              "ec2:DescribeInstanceAttribute",
+                                              "ec2:ListImagesInRecycleBin",
+                                              "ec2:DescribeInstanceStatus"
+                                          ],
+                                          "Resource": "*"
+                                      },
+                                      {
+                                          "Sid": "CWLogGroups",
+                                          "Effect": "Allow",
+                                          "Action": [
+                                              "logs:CreateLogStream",
+                                              "logs:DescribeLogGroups",
+                                              "logs:DescribeLogStreams",
+                                              "logs:CreateLogGroup",
+                                              "logs:PutLogEvents"
+                                          ],
+                                          "Resource": "*"
+                                      },
+                                      {
+                                        "Sid": "S3FullAccess",
+                                        "Effect": "Allow",
+                                        "Action": [
+                                            "s3:*"
+                                        ],
+                                        "Resource": [
+                                            { "Fn::Sub": "arn:aws:s3:::${imageBuilderBucket}" },
+                                            { "Fn::Sub": "arn:aws:s3:::${imageBuilderBucket}/*" },
+                                            { "Fn::Sub": "arn:aws:s3:::${GoldenAMIConfigBucket}" },
+                                            { "Fn::Sub": "arn:aws:s3:::${GoldenAMIConfigBucket}/*" }
+                                        ]
+                                      }
+                                  ]
+                              }
+                          }
+                      ]
+                  }
+              },
+
+      "ManagedInstanceProfile": {
+                  "Type": "AWS::IAM::InstanceProfile",
+                  "Properties": {
+                      "Path": "/",
+                      "Roles": [
+                          {
+                              "Ref": "ManagedInstanceRole"
+                          }
+                      ]
+                  }
+              },
+
+      "AutomationServiceRole": {
+                "Type": "AWS::IAM::Role",
+                "DependsOn": [
+                    "StoreVersionLambdaFunction",
+                    "AppendParamLambda"
+                  ],
+                "Properties": {
+                    "AssumeRolePolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                            {
+                                "Effect": "Allow",
+                                "Principal": {
+                                    "Service": [
+                                        "ssm.amazonaws.com",
+                                        "ec2.amazonaws.com"
+                                    ]
+                                },
+                                "Action": "sts:AssumeRole"
+                            }
+                        ]
+                    },
+                    "ManagedPolicyArns": [
+                        "arn:aws:iam::aws:policy/service-role/AmazonSSMAutomationRole"
+                    ],
+                    "Path": "/",
+                    "Policies": [
+                        {
+                            "PolicyName": "passrole",
+                            "PolicyDocument": {
+                                "Version": "2012-10-17",
+                                "Statement": [
+                                    {
+                                        "Effect": "Allow",
+                                        "Action": [
+                                            "iam:PassRole"
+                                        ],
+                                        "Resource": [
+                                            {
+                                                "Fn::GetAtt": [
+                                                    "ManagedInstanceRole",
+                                                    "Arn"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "Effect": "Allow",
+                                        "Action": [
+                                            "ssm:*",
+                                            "kms:*",
+                                            "ec2:*"
+                                        ],
+                                        "Resource": "*"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "PolicyName": "invokeLambdaFunction",
+                            "PolicyDocument": {
+                                "Version": "2012-10-17",
+                                "Statement": [
+                                    {
+                                        "Effect": "Allow",
+                                        "Action": "lambda:InvokeFunction",
+                                        "Resource": [
+                                            { "Fn::GetAtt": [ "StoreVersionLambdaFunction","Arn"]},
+                                            { "Fn::GetAtt": [ "AppendParamLambda","Arn"]},
+                                            { "Fn::GetAtt": [ "CopyToMultipleAccountsLambdaFunction","Arn"]},
+                                            { "Fn::GetAtt": [ "PublishAMILambda","Arn"]},
+                                            { "Fn::Join":
+                                                [
+                                                    "",
+                                                    [
+                                                        "arn:aws:lambda:", "*",
+                                                        ":",
+                                                        {
+                                                            "Ref":"AWS::AccountId"
+                                                        },
+                                                        ":function:TriggerCopyandShareAMI"
+                                                    ]
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+             },
+
+      "AppendParamLambdaRole": {
+              "Type": "AWS::IAM::Role",
+              "Properties": {
+                "PermissionsBoundary": { "Fn::Join":
+                [
+                    "",
+                    [
+                        "arn:aws:iam:",
+                        ":",
+                        {
+                            "Ref":"AWS::AccountId"
+                        },
+                        ":policy/",
+                        { 
+                            "Ref":"iamrolepb" 
+                        }
+                    ]
+                ]},
+                  "ManagedPolicyArns": [
+                      "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                  ],
+                  "AssumeRolePolicyDocument": {
+                      "Version": "2012-10-17",
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                  "Service": [
+                                      "lambda.amazonaws.com"
+                                  ]
+                              },
+                              "Action": [
+                                  "sts:AssumeRole"
+                              ]
+                          }
+                      ]
+                  },
+                  "Path": "/",
+                  "Policies": [
+                      {
+                          "PolicyName": "AppendSsmParamLambdaPolicy",
+                          "PolicyDocument": {
+                              "Version": "2012-10-17",
+                              "Statement": [
+                                  {
+                                      "Effect": "Allow",
+                                      "Action": [
+                                          "ssm:GetParameter*",
+                                          "ssm:PutParameter*"
+                                      ],
+                                      "Resource": { "Fn::Join":
+                              [
+                                  "",
+                                  [
+                                      "arn:aws:ssm:", "*",
+                                      ":",
+                                      {
+                                          "Ref":"AWS::AccountId"
+                                      },
+                                      ":parameter/GoldenAMI/*"
+                                  ]
+                              ]}
+                                  }
+                              ]
+                          }
+                      }
+                  ]
+              }
+          },
+
+      "AppendParamLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Role": {
+                    "Fn::GetAtt": [
+                        "AppendParamLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": {
+                        "Fn::Join": [
+                            "",
+                            [
+
+                                "\n","import json",
+                                "\n","import boto3",
+                                "\n","import botocore",
+                                "\n","def lambda_handler(event, context):",
+                                "\n","    paramName =event['parameterName'];",
+                                "\n","    amiIDVal=event['valueToBeCreatedOrAppended']",
+                                "\n","    action=event['action']",
+                                "\n","    print(amiIDVal)",
+                                "\n","    amiID=amiIDVal.replace(\"",  "\\\\r\\\\n",    "\",\"\\n\")",
+                                "\n","    print(amiID)",
+                                "\n","    ssm = boto3.client('ssm')",
+                                "\n","    try:",
+                                "\n","        AMIIdsParam =ssm.get_parameter(Name=paramName)",
+                                "\n","        AMIIds=AMIIdsParam['Parameter']['Value']",
+                                "\n","        if action == 'overwrite':",
+                                "\n","            AMIIds= amiID",
+                                "\n","        else:",
+                                "\n","            AMIIds= AMIIds+','+ amiID",
+                                "\n","        ssm.put_parameter(Name=paramName,Type='String', Value=AMIIds,Overwrite=True)",
+                                "\n","    except botocore.exceptions.ClientError as e:",
+                                "\n","        if e.response['Error']['Code'] == 'ParameterNotFound':",
+                                "\n","            ssm.put_parameter(Name=paramName,Type='String', Value=amiID,Overwrite=True)",
+                                "\n","    return 'appended parameter %s with value %s.' % (paramName,amiID)"
+                            ]
+                        ]
+                    }
+                },
+                "Runtime": "python3.9",
+                "Timeout": 300,
+                "Handler": "index.lambda_handler",
+                "MemorySize": 512
+            }
+        },
+      
+      "StoreVersionLambdaFunction": {
+              "Type": "AWS::Lambda::Function",
+              "Properties": {
+                  "Role": {
+                      "Fn::GetAtt": [
+                          "AppendParamLambdaRole",
+                          "Arn"
+                      ]
+                  },
+                  "Code": {
+                      "ZipFile": {
+                          "Fn::Join": [
+                              "\n",
+                              [
+                                  "import json",
+                                  "import urllib.parse",
+                                  "import boto3",
+                                  "import time",
+                                  "import os",
+                                  "def lambda_handler(event, context):",
+                                  "    amiId = event['AMI-ID']",
+                                  "    instanceId = event['instanceId']",
+                                  "    productOS = event.get('productOS')",
+                                  "    productName = event.get('productName')",
+                                  "    productVersion = event.get('productVersion')",
+                                  "    topicArn=event['topicArn']",
+                                  "    fullName = amiId+'-'+productOS+'/'+productName+'/'+productVersion",
+                                  "    region = os.environ[\"AWS_DEFAULT_REGION\"]",
+                                  "    ",
+                                  "    assessmentTemplateArn=\"\";",
+                                  "    ",
+                                  "    ec2Source =boto3.resource('ec2',region)",
+                                  "    ssm = boto3.client('ssm',region) ",
+                                  "    ParamName='/GoldenAMI/'+productOS+'/'+productName+'/'+productVersion+'/latestInstance'",
+                                  "    ssm.put_parameter(Name=ParamName,Value=instanceId,Type='String',Overwrite=True) ",
+                                  "    time.sleep(10)",
+                                  "    return \"Done\""
+                              ]
+                          ]
+                      }
+                  },
+                  "Runtime": "python3.9",
+                  "Timeout": 300,
+                  "Handler": "index.lambda_handler",
+                  "MemorySize": 512
+              }
+          },
+
+      "ApproverTopicPolicy": {
+              "Type": "AWS::SNS::TopicPolicy",
+              "Properties": {
+                  "PolicyDocument": {
+                      "Id": "ApproverTopicPolicy",
+                      "Version": "2012-10-17",
+                      "Statement": [
+                          {
+                              "Sid": "ApproverTopicPolicySID",
+                              "Effect": "Allow",
+                              "Principal": {
+                                  "AWS": [
+                                      {
+                                          "Fn::GetAtt": [
+                                              "AutomationServiceRole",
+                                              "Arn"
+                                          ]
+                                      }
+                                  ]
+                              },
+                              "Action": "sns:Publish",
+                              "Resource": {
+                          "Ref": "ApproverNotification"
+                      }
+                          }
+                      ]
+                  },
+                  "Topics": [
+                      {
+                          "Ref": "ApproverNotification"
+                      }
+                  ]
+              }
+          },
+
+      "ApproverNotification": {
+                  "Type": "AWS::SNS::Topic"
+              },
+
+      "ApproverNotificationSubscription" : {
+                "Type" : "AWS::SNS::Subscription",
+                "Properties" : {
+                  "Endpoint" : {"Ref":"EmailID"},
+                  "Protocol" : "email",
+                  "TopicArn" : {"Ref" : "ApproverNotification"}
+                }
+              },
+
+      "GoldenAMIAutomationDoc": {
+                  "Type": "AWS::SSM::Document",
+                  "Properties": {
+                      "DocumentType": "Automation",
+                      "Name": "Eiger-GoldenAMIAutomationDoc",
+                      "Content": {
+                          "description": "This automation document triggers Golden AMI creation workflow.",
+                          "schemaVersion": "0.3",
+                          "assumeRole": {
+                              "Fn::GetAtt": [
+                                  "AutomationServiceRole",
+                                  "Arn"
+                              ]
+                          },
+                          "parameters": {
+                              "ImageAmiId": {
+                                  "type": "String",
+                                  "description": "golden AMI ImageAmiId",
+                                  "default": ""
+                              },
+
+                              "ImageDate": {
+                                  "type": "String",
+                                  "description": "golden AMI Imagedate",
+                                  "default": ""
+                              },
+
+                              "DebugQualysAssesment": {
+                                "type": "String",
+                                "description": "Debug Qualys Assesment Shell Script Run",
+                                "default": "{{ssm:/GoldenAMI/Qualys/DebugQualysAssesment}}"
+                              },
+
+                              "QualysUsername": {
+                                "default": "/GoldenAMI/Qualys/QualysUsername",
+                                "description": "SSM parameter name of Qualys username to access API",
+                                "type": "String"
+                              },
+
+                              "QualysPassword": {
+                                "default": "/GoldenAMI/Qualys/QualysPassword",
+                                "description": "SSM parameter name of the Qualys password to access API",
+                                "type": "String"
+                              },
+
+                              "InstanceTag": {
+                                "type": "String",
+                                "description": "Qualys Assesment Instance Tag",
+                                "default": {
+                                    "Ref": "instanceTag"
+                                  }
+                              },
+                              
+                              "QualysScannerName": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysScannerName}}",
+                                "description": "Scanner name for launching Qualys VM Scan",
+                                "type": "String"
+                              },
+
+                              "Ec2ConnectorName": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysEc2ConnectorName}}",
+                                "description": "Connector name for launching Qualys EC2 Vulnerability Scan",
+                                "type": "String"
+                              },
+
+                              "Ec2ConnectorId": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysEc2ConnectorId}}",
+                                "description": "Connector ID for launching Qualys EC2 Scan",
+                                "type": "String"
+                              },
+
+                              "SshKeyName": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/SSHKeyName}}",
+                                "description": "SSH Key for Qualys Authentication Record",
+                                "type": "String"
+                              },
+
+                              "QualysVmOptionId": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysVmOptionId}}",
+                                "description": "Option ID for launching Qualys VM Scan",
+                                "type": "String"
+                              },
+
+                              "QualysRunPcScan": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysRunPcScan}}",
+                                "description": "Enable Qualys PC Scan for GAP",
+                                "type": "String"
+                              },
+
+                              "QualysPCOptionId": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysPCOptionId}}",
+                                "description": "Option ID for launching Qualys PC Scan",
+                                "type": "String"
+                              },
+
+                              "QualysQcaActivationID": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysQcaActivationID}}",
+                                "description": "SSM Parameter for Qualys QCA Activation ID",
+                                "type": "String"
+                              },
+
+                              "QualysQcaCustomerID": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysQcaCustomerID}}",
+                                "description": "SSM Parameter for Qualys QCA Customer ID",
+                                "type": "String"
+                              },
+
+                              "QualysQcaLogLevel": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysQcaLogLevel}}",
+                                "description": "SSM Parameter for Qualys Cloud Agent Log Level",
+                                "type": "String"
+                              },
+
+                              "QualysApiUrl": {
+                                "type": "String",
+                                "description": "Your Qualys URL for accessing API",
+                                "default": {
+                                    "Ref": "qualysApiUrl"
+                                  }
+                              },
+
+                              "QualysParentTagId": {
+                                "default": "{{ssm:/GoldenAMI/Qualys/QualysParentTagId}}",
+                                "description": "SSM parameter for the Qualys Parent Tag ID",
+                                "type": "String"
+                              },
+
+                              "productName": {
+                                  "type": "String",
+                                  "description": "The syntax of this parameter is ProductName-ProductVersion.",
+                                  "default": {
+                                      "Ref": "productName"
+                                }
+                              },
+
+                              "productOSAndVersion": {
+                                  "type": "String",
+                                  "description": "The syntax of this parameter is OSName-OSVersion",
+                                  "default": "productOSAndVersion"
+                                },
+                              
+                              "AMIVersion": {
+                                  "type": "String",
+                                  "description": "Golden AMI Build version number to be created.",
+                                  "default": {
+                                      "Ref": "buildVersion"
+                                  }
+                                },           
+ 
+                              "VpcId": {
+                                  "type": "String",
+                                  "description": "Golden AMI Build Instance VpcId.",
+                                  "default": {
+                                      "Ref": "VpcId"
+                                  }
+                                },
+
+                              "SubnetId": {
+                                  "type": "String",
+                                  "description": "Golden AMI Build Instance SubnetId.",
+                                  "default": {
+                                      "Ref": "SubnetId"
+                                }
+                              },
+
+                              "SecurityGroupName": {
+                                  "type": "String",
+                                  "description": "The name of SecurityGroup Attached to EC2 Instance.",
+                                  "default": "ec2imagebuilder-sg"
+                              },
+
+                              "RemoteAccessCidr": {
+                                "type": "String",
+                                "description": "emoteAccessCidr for SecurityGroup Attached to EC2 Instance.",
+                                "default": "10.0.0.0/8"
+                              },
+
+                              "instanceType": {
+                                  "type": "String",
+                                  "description": "A compatible instance-type for launching an instance",
+                                  "default": {
+                                      "Ref": "instanceType"
+                                  }
+                              },
+
+                              "ApproverUserIAMARN": {
+                                  "type": "String",
+                                  "description": "IAM ARN of the user who has SSM approval permissions.",
+                                  "default": "{{ssm:/GoldenAMI/Qualys/ApproverUserIAMARN}}"
+                              },
+
+                                "ApproverNotificationArn": {
+                                    "type": "String",
+                                    "description": "SNS Topic ARN on which a notification would be published once the golden AMI candidate is ready for validation.",
+                                    "default": {
+                                        "Ref": "ApproverNotification"
+                                    }
+                              },
+
+                              "ManagedInstanceProfile": {
+                                  "type": "String",
+                                  "description": "Instance Profile. Do not change the default value.",
+                                  "default": {
+                                      "Ref": "ManagedInstanceProfile"
+                                  }
+                              },
+
+                              "PreUpdateScript": {
+                                  "type": "String",
+                                  "description": "(Optional) URL of a script to run before updates are applied. Default (\"none\") is to not run a script.",
+                                  "default": "none"
+                              },
+
+                              "PostUpdateScript": {
+                                  "type": "String",
+                                  "description": "(Optional) URL of a script to run after package updates are applied. Default (\"none\") is to not run a script.",
+                                  "default": "none"
+                              }
+
+                          },
+                          "mainSteps": [
+                              {
+                                  "name": "TagTheAMI",
+                                  "action": "aws:createTags",
+                                  "timeoutSeconds": 1200,
+                                  "maxAttempts": 1,
+                                  "onFailure": "Continue",
+                                  "inputs": {
+                                      "ResourceType": "EC2",
+                                      "ResourceIds": [
+                                          "{{ImageAmiId}}"
+                                      ],
+                                      "Tags": [
+                                          {
+                                              "Key": "ProductOSAndVersion",
+                                              "Value": "{{productOSAndVersion}}"
+                                          },
+                                          {
+                                              "Key": "ProductName",
+                                              "Value": "{{productName}}"
+                                          },
+                                          {
+                                              "Key": "version",
+                                              "Value": "{{AMIVersion}}"
+                                          },
+                                          {
+                                              "Key": "AMI-Type",
+                                              "Value": "Golden"
+                                          }
+                                      ]
+                                  }
+                              },
+
+                              {
+                                  "name": "DescribeSecurityGroup",
+                                  "action": "aws:executeAwsApi",
+                                  "inputs": {
+                                      "Service": "ec2",
+                                      "Api": "DescribeSecurityGroups",
+                                      "Filters": [
+                                          {
+                                              "Name": "group-name",
+                                              "Values": [ "{{ SecurityGroupName }}" ]
+                                          },
+                                          {
+                                              "Name": "vpc-id",
+                                              "Values": [ "{{ VpcId }}" ]
+                                          }
+                                      ]
+                                  },
+                                  "outputs": [
+                                      {
+                                          "Name": "SecurityGroup",
+                                          "Selector": "$.SecurityGroups[0].GroupName",
+                                          "Type": "String"
+                                      },
+                                      {
+                                          "Name": "SecurityGroupId",
+                                          "Selector": "$.SecurityGroups[0].GroupId",
+                                          "Type": "String"
+                                      }
+                                  ]
+                              },
+
+                              {
+                                "name": "CheckSecurityGroupStatus",
+                                "action": "aws:branch",
+                                "inputs": {
+                                    "Choices": [
+                                        {
+                                            "NextStep": "verifySecurityGroup",
+                                            "Variable": "{{ DescribeSecurityGroup.SecurityGroup }}",
+                                            "StringEquals": "{{ SecurityGroupName }}"
+                                        }
+                                    ],
+                                    "Default": "CreateSecurityGroup"
+                                }
+                              },
+
+                              {
+                                "name": "CreateSecurityGroup",
+                                "action": "aws:executeAwsApi",
+                                "inputs": {
+                                    "Service": "ec2",
+                                    "Api": "CreateSecurityGroup",
+                                    "GroupName": "{{ SecurityGroupName }}",
+                                    "VpcId": "{{ VpcId }}"
+                                },
+                                "outputs": [
+                                    {
+                                        "Name": "SecurityGroupId",
+                                        "Selector": "$.GroupId",
+                                        "Type": "String"
+                                    }
+                                ]
+                              },
+
+                              {
+                                "name": "AuthorizeSecurityGroupSSH",
+                                "action": "aws:executeAwsApi",
+                                "inputs": {
+                                    "Service": "ec2",
+                                    "Api": "AuthorizeSecurityGroupIngress",
+                                    "CidrIp": "{{ RemoteAccessCidr }}",
+                                    "FromPort": "22",
+                                    "ToPort": "22",
+                                    "GroupId": "{{ CreateSecurityGroup.SecurityGroupId }}",
+                                    "IpProtocol": "tcp"
+                                }
+                              },
+                              
+                              {
+                                "name": "AuthorizeSecurityGroupHTTPS",
+                                "action": "aws:executeAwsApi",
+                                "inputs": {
+                                    "Service": "ec2",
+                                    "Api": "AuthorizeSecurityGroupIngress",
+                                    "CidrIp": "{{ RemoteAccessCidr }}",
+                                    "FromPort": "443",
+                                    "ToPort": "443",
+                                    "GroupId": "{{ CreateSecurityGroup.SecurityGroupId }}",
+                                    "IpProtocol": "tcp"
+                                }
+                              },
+                           
+                              {
+                                "name": "AuthorizeSecurityGroupICMP",
+                                "action": "aws:executeAwsApi",
+                                "inputs": {
+                                    "Service": "ec2",
+                                    "Api": "AuthorizeSecurityGroupIngress",
+                                    "CidrIp": "{{ RemoteAccessCidr }}",
+                                    "FromPort": "-1",
+                                    "ToPort": "-1",
+                                    "GroupId": "{{ CreateSecurityGroup.SecurityGroupId }}",
+                                    "IpProtocol": "icmp"
+                                }
+                              },
+                            
+                              {
+                                "name": "verifySecurityGroup",
+                                "action": "aws:executeAwsApi",
+                                "inputs": {
+                                    "Service": "ec2",
+                                    "Api": "DescribeSecurityGroups",
+                                    "Filters": [
+                                        {
+                                          "Name": "group-name",
+                                          "Values": [ "{{ SecurityGroupName }}" ]
+                                        },
+                                        {
+                                          "Name": "vpc-id",
+                                          "Values": [ "{{ VpcId }}" ]
+                                        }
+                                    ]
+                                },
+                                "outputs": [
+                                    {
+                                      "Name": "verifySecurityGroup",
+                                      "Selector": "$.SecurityGroups[0].GroupName",
+                                      "Type": "String"
+                                    },
+                                    {
+                                       "Name": "verifySecurityGroupId",
+                                       "Selector": "$.SecurityGroups[0].GroupId",
+                                       "Type": "String"
+                                    }
+                                ]
+                              },
+
+                              {
+                                  "name": "createInstanceFromNewImage",
+                                  "action": "aws:runInstances",
+                                  "timeoutSeconds": 1200,
+                                  "maxAttempts": 3,
+                                  "onFailure": "Abort",
+                                  "inputs": {
+                                      "ImageId": "{{ImageAmiId}}",
+                                      "InstanceType": "{{instanceType}}",
+                                      "MinInstanceCount": 1,
+                                      "MaxInstanceCount": 1,
+                                      "KeyName": "{{ SshKeyName }}",
+                                      "NetworkInterfaces": [
+                                        {
+                                          "DeviceIndex": 0,
+                                          "AssociatePublicIpAddress": false,
+                                          "SubnetId": "{{ SubnetId }}",
+                                          "Groups": ["{{ verifySecurityGroup.verifySecurityGroupId }}"],
+                                          "DeleteOnTermination": true
+                                        }
+                                      ],
+                                      "IamInstanceProfileName": "{{ ManagedInstanceProfile }}",
+                                      "TagSpecifications":[
+                                        {
+                                           "ResourceType":"instance",
+                                           "Tags":[
+                                              {
+                                                 "Key":"Name",
+                                                 "Value":"QualysAutoScanTest-{{productOSAndVersion}}-{{ImageDate}}"
+                                              },
+                                              {
+                                                "Key":"Owner",
+                                                "Value":"Infrastructure"
+                                             },
+                                             {
+                                                "Key":"Environment",
+                                                "Value":"Sandbox"
+                                             },
+                                             {
+                                                "Key":"Backup",
+                                                "Value":"No"
+                                             },
+                                             {
+                                                "Key":"Patching",
+                                                "Value":"No"
+                                             },
+                                             {
+                                                "Key":"BuiltFromGI",
+                                                "Value":"Yes"
+                                             },
+                                             {
+                                                "Key":"Application",
+                                                "Value":"GoldenImageTest"
+                                             }
+                                           ]
+                                        }
+                                    ]
+                                 }
+                              },
+
+                              {
+                                "maxAttempts": 3,
+                                "inputs": {
+                                  "Parameters": {
+                                    "commands": [
+                                      "#!/bin/bash",
+                                      "set -e",
+                                      "if [[ \"{{DebugQualysAssesment}}\" = \"true\" ]];then",
+                                        "echo -e \"\n$(tput setaf 3) ***INFO : Turning ON Debug for Shell Script Run***$(tput setaf 9)\n\"",
+                                        "trap 'echo \"$(tput setaf 6)#**CMD**# $BASH_COMMAND$(tput setaf 9)\"' DEBUG",
+                                        "set -x",
+                                      "fi",
+                                      "dash () {",
+                                        "yes \"#\" | head -n 100 | tr -d \"\n\"",
+                                        "echo -e \"\n\"",
+                                      "}",
+                                      "",
+                                      "INSTANCE_ID=\"{{ createInstanceFromNewImage.InstanceIds }}\"",
+                                      "AMI_ID=\"{{ImageAmiId}}\"",
+                                      "REGION=\"{{global:REGION}}\"",
+                                      "if [[ ! -d ~ssm-user/.ssh ]];then",
+                                        "mkdir -m 700 ~ssm-user/.ssh",
+                                        "echo -e \"#Qualys Authenticated Scan PublicKey With Mandatory Source (i.e from) Filter#\\nfrom=\"10.95.224.0/20\" ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCkNqJmXhl7KzmnXHFUZa5IIDvBGX94HVSy+0OyqN2mvkbSfC+9rZOAn2aq419WOlddrz7YTDzb7rsWA6vnDD0rma0keYo9iWJfRaw89SMugYCutmbTpEhlFiYNWBzpaAfGFDpKvzMunH/WVJzHmL8/GjySDWRCg/jxcsgK0E67hJsem/m3oanT3LcruwFyQz5zk5sKc4c1aHhcxVLi8LQl0OKMrtBPUImzF4tzJJXNk0J1CrKBK4PrCM0GHGBl5sL/Ue01c36RkT/R9tEHDrUiUvLJhHokggqOoQzziAur680b1NldlMTksnSNqbDmo/z2SY/asmbUZtmkremmM4Qr ssm-user@qualys\" > ~ssm-user/.ssh/authorized_keys",
+                                        "chown -R ssm-user: ~ssm-user",
+                                      "fi",
+                                      "ami_golden=$(aws ec2 describe-images --region $REGION --filters \"Name=tag:AMI-Type,Values=Golden\" --query 'Images[*].[ImageId]' --output text | grep $AMI_ID)",
+                                      "if [[ -n $ami_golden ]];then",
+                                        "echo -e \"\\nThis Instance is launched using Golden Image AMI : $AMI_ID\\n\"",
+                                        "echo -e \"This InstanceID: $INSTANCE_ID\"",
+                                        "source /etc/os-release",
+                                        "SELinux=$(getenforce)",
+                                        "NAME=$(echo $NAME)",
+                                        "MAJOR_VERSION=$(echo $VERSION|grep -o ^[0-9])",
+                                        "MAJOR_MINOR=$(echo $VERSION)",
+                                        "FULL_VERSION=$(echo \"$ID$MAJOR_MINOR\")",
+                                        "aws ec2 describe-tags --filters \"Name=resource-id,Values=$AMI_ID\" --output text",
+                                        "echo -e \"\\nUpdating Tags for AMI: $AMI_ID\\n\"",
+                                        "aws ec2 create-tags --resources $AMI_ID --tags Key=OSMajorMinorVersion,Value=\"$FULL_VERSION\"",
+                                        "aws ec2 create-tags --resources $AMI_ID --tags Key=SELinux,Value=\"$SELinux\"",
+                                        "aws ec2 describe-tags --filters \"Name=resource-id,Values=$AMI_ID\" --output text",
+                                      "else",
+                                        "echo -e \"\\nCannot Determine the AMI ID, Skipping Update Tags on AMI ...\\n\"",
+                                      "fi",
+                                      "date && echo -e \"\\nRunning Qualys VM Scan\\n\" && echo \"/usr/local/qualys/cloud-agent/bin/cloudagentctl.sh action=demand type=vm cputhrottle=0\" | at now +30 minutes",
+                                      "date && echo -e \"\\nRunning Qualys INV Scan\\n\" && echo \"/usr/local/qualys/cloud-agent/bin/cloudagentctl.sh action=demand type=inv cputhrottle=0\" | at now +45 minutes",
+                                      "date && echo -e \"\\nRunning Qualys PC Scan\\n\" && echo \"/usr/local/qualys/cloud-agent/bin/cloudagentctl.sh action=demand type=pc cputhrottle=0\" | at now +60 minutes",
+                                      "dash",
+                                      "###Qualys Agent Run###",
+                                      "echo -e \"\n$(tput setaf 3)*** Getting SSM Parameter Value : {{QualysUsername}} ***$(tput setaf 9)\"",
+                                      "QualysUsername=$(aws ssm get-parameter --with-decryption --region $REGION --name {{QualysUsername}} --query 'Parameter.Value' --output text)",
+                                      "echo -e \"\n$(tput setaf 3)*** Getting SSM Parameter Value : {{QualysPassword}} ***$(tput setaf 9)\"",
+                                      "QualysPassword=$(aws ssm get-parameter --with-decryption --region $REGION --name {{QualysPassword}} --query 'Parameter.Value' --output text)",
+                                      "QualysRunPcScan=\"{{QualysRunPcScan}}\"",
+                                      "INSTANCE_TAG=\"{{InstanceTag}}\"",
+                                      "dash",
+                                      "###Creating Tag###",
+                                      "echo -e \"$(tput setaf 3)*** Creating Tag ***$(tput setaf 9)\n\"",
+                                      "curl -s -H \"X-Requested-With: Curl\" -H \"Content-Type: application/json\" -H \"Accept: application/json\" -u \"$QualysUsername:$QualysPassword\" -X \"POST\" -d \"{\\\"ServiceRequest\\\":{\\\"data\\\":{\\\"Tag\\\":{\\\"name\\\":\\\"GAP $AMI_ID $INSTANCE_ID\\\",\\\"parentTagId\\\":\\\"{{QualysParentTagId}}\\\",\\\"ruleType\\\":\\\"CLOUD_ASSET\\\",\\\"provider\\\":\\\"EC2\\\",\\\"ruleText\\\":\\\"aws.ec2.imageId:$AMI_ID\\\",\\\"color\\\":\\\"#FFD700\\\"}}}}\" \"{{QualysApiUrl}}/qps/rest/2.0/create/am/tag/\" | tee create-tag-log.txt",
+                                      "sleep 5",
+                                      "dash",
+                                      "###Searching Tag###",
+                                      "echo -e \"$(tput setaf 3)*** Searching Tag ***$(tput setaf 9)\n\"",
+                                      "curl -s -H \"X-Requested-With: Curl\" -H \"Content-Type: text/xml\" -u \"$QualysUsername:$QualysPassword\" -X \"POST\" -d \"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\" ?><ServiceRequest><filters><Criteria field=\\\"name\\\" operator=\\\"EQUALS\\\">$INSTANCE_TAG</Criteria></filters></ServiceRequest>\" \"{{QualysApiUrl}}/qps/rest/2.0/search/am/tag\" | tee search-tag-data.txt",
+                                      "TagID=$(xmllint --xpath '//data/Tag/id/text()' search-tag-data.txt)",
+                                      "echo -e \"\n\nTAGID: $TagID\"",
+                                      "dash",
+                                      "###Searching EC2 HostAsset###",
+                                      "echo -e \"$(tput setaf 3)*** Searching HostAsset ***$(tput setaf 9)\n\"",
+                                      "curl -s -H \"X-Requested-With: Curl\" -H \"Content-Type: text/xml\" -u \"$QualysUsername:$QualysPassword\" -X \"POST\" -d \"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\" ?><ServiceRequest><filters><Criteria field=\\\"instanceId\\\" operator=\\\"EQUALS\\\">$INSTANCE_ID</Criteria></filters></ServiceRequest>\" \"{{QualysApiUrl}}/qps/rest/2.0/search/am/hostasset\" > search-ha-data.txt",
+                                      "HAID=$(xmllint --xpath '//data/HostAsset/id/text()' search-ha-data.txt)",
+                                      "echo -e \"HostAsset ID: $HAID\"",
+                                      "dash",
+                                      "###Adding Tag to EC2 HostAsset###",
+                                      "echo -e \"$(tput setaf 3)*** Adding Tag to HostAsset ***$(tput setaf 9)\n\"",
+                                      "curl -s -H \"X-Requested-With: Curl\" -H \"Content-Type: text/xml\" -u \"$QualysUsername:$QualysPassword\" -X \"POST\" -d \"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\" ?><ServiceRequest><data><HostAsset><tags><add><TagSimple><id>$TagID</id></TagSimple></add></tags></HostAsset></data></ServiceRequest>\" \"{{QualysApiUrl}}/qps/rest/2.0/update/am/hostasset/$HAID\" | tee update-tag-data.txt",
+                                      "dash",
+                                      "###Listing Tags on EC2 HostAsset###",
+                                      "echo -e \"\n$(tput setaf 3)*** Listing Tags on HostAsset ***$(tput setaf 9)\n\"",
+                                      "curl -s -H \"X-Requested-With: Curl\" -H \"Content-Type: text/xml\" -u \"$QualysUsername:$QualysPassword\" -X \"GET\" \"{{QualysApiUrl}}/qps/rest/2.0/get/am/hostasset/$HAID\" > list-tags-data.txt",
+                                      "TAGS=$(xmllint --xpath '//data/HostAsset/tags/list/TagSimple/name/text()' list-tags-data.txt)",
+                                      "echo -e \"TAGS: $TAGS\n\"",
+                                      "dash",
+                                      "###Deactivate EC2 HostAsset###",
+                                      "echo -e \"$(tput setaf 3)*** Deactivating HostAsset ***$(tput setaf 9)\n\"",
+                                      "curl -s -H \"X-Requested-With: Curl\" -H \"X-Requested-With: Curl\" -H \"Content-Type: text/xml\" -H \"Accept: text/xml\" -u \"$QualysUsername:$QualysPassword\" -X \"POST\" -d \"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\" ?><ServiceRequest><filters><Criteria field=\\\"tagName\\\" operator=\\\"EQUALS\\\">GAP $AMI_ID $INSTANCE_ID</Criteria></filters></ServiceRequest>\" \"{{QualysApiUrl}}/qps/rest/2.0/deactivate/am/asset\"",
+                                      "sleep 5",
+                                      "dash",
+                                      "###HostAsset EC2 Scan Launch###",
+                                      "echo -e \"$(tput setaf 3)*** HostAsset EC2 Scan Launch ***$(tput setaf 9)\n\"",
+                                      "curl -s -H \"X-Requested-With: Curl\" -H \"X-Requested-With: Curl\" -u \"$QualysUsername:$QualysPassword\" -X \"POST\" \"{{QualysApiUrl}}/qps/rest/2.0/run/am/assetdataconnector/{{Ec2ConnectorId}}\" | tee ec2-scan-launch-log.txt",
+                                      "sleep 5",
+                                      "dash",
+                                      "###HostAsset VM Scan Launch###",
+                                      "echo -e \"$(tput setaf 3)*** HostAsset VM Scan Launch ***$(tput setaf 9)\n\"",
+                                      "curl -s -H \"X-Requested-With: Curl\" -u \"$QualysUsername:$QualysPassword\" -X \"POST\" -d \"action=launch&scan_title=CANDIDATE+AMI+Scan+{{ImageAmiId}}&ec2_instance_ids=$INSTANCE_ID&connector_name={{Ec2ConnectorName}}&ec2_endpoint=$REGION&option_id={{QualysVmOptionId}}&iscanner_name={{QualysScannerName}}\" \"{{QualysApiUrl}}/api/2.0/fo/scan/\" | tee vm-scan-launch-log.txt",
+                                      "dash",
+                                      "###HostAsset EC2 PC Scan Launch###",
+                                      "if [[ \"$QualysRunPcScan\" == \"YES\" ]]; then",
+                                        "echo -e \"$(tput setaf 3)*** HostAsset PC Scan Launch ***$(tput setaf 9)\n\"",
+                                        "curl -s -H \"X-Requested-With: Curl\" -u \"$QualysUsername:$QualysPassword\" -X \"POST\" -d \"action=launch&scan_title=CANDIDATE+AMI+Scan+{{ImageAmiId}}&ec2_instance_ids=$INSTANCE_ID&connector_name={{Ec2ConnectorName}}&ec2_endpoint=$REGION&option_id={{QualysPCOptionId}}&iscanner_name={{QualysScannerName}}\" \"{{QualysApiUrl}}/api/2.0/fo/scan/compliance/\" | tee pc-scan-launch-log.txt",
+                                      "fi",
+                                      "sleep 10",
+                                      "dash"
+                                    ]
+                                  },
+                                  "InstanceIds": [
+                                    "{{ createInstanceFromNewImage.InstanceIds }}"
+                                  ],
+                                  "DocumentName": "AWS-RunShellScript",
+                                  "CloudWatchOutputConfig": {
+                                    "CloudWatchLogGroupName": "/aws/ssm/Eiger-GoldenAMIAutomationDoc",
+                                    "CloudWatchOutputEnabled": "true"
+                                  }
+                                },
+                                "name": "LaunchQualysAssessment",
+                                "action": "aws:runCommand",
+                                "timeoutSeconds": 3600,
+                                "onFailure": "Abort"
+                              },
+
+                              {
+                                  "name": "sleep2",
+                                  "action": "aws:sleep",
+                                  "inputs": {
+                                      "Duration": "PT01M"
+                                  }
+                              },
+
+                              {
+                                  "name": "TagNewinstance",
+                                  "action": "aws:createTags",
+                                  "timeoutSeconds": 1200,
+                                  "maxAttempts": 1,
+                                  "onFailure": "Continue",
+                                  "inputs": {
+                                      "ResourceType": "EC2",
+                                      "ResourceIds": [
+                                          "{{ createInstanceFromNewImage.InstanceIds }}"
+                                      ],
+                                      "Tags": [
+                                          {
+                                              "Key": "Type",
+                                              "Value": "{{ImageAmiId}}-{{productOSAndVersion}}/{{productName}}/{{AMIVersion}}"
+                                          },
+                                          {
+                                              "Key": "Automation-Instance-Type",
+                                              "Value": "Golden"
+                                          }
+                                      ]
+                                  }
+                              },
+
+                              {
+                                "name": "StoreVersion",
+                                "action": "aws:invokeLambdaFunction",
+                                "maxAttempts": 3,
+                                "timeoutSeconds": 120,
+                                "onFailure": "Abort",
+                                "inputs": {
+                                    "FunctionName": { "Ref": "StoreVersionLambdaFunction"},
+                                    "Payload": {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                "{\"AMI-ID\": \"{{ImageAmiId}}\",\"topicArn\":\"",
+                                                "\",\"instanceId\": \"{{ createInstanceFromNewImage.InstanceIds }}\",\"productOS\": \"{{productOSAndVersion}}\",\"productName\": \"{{productName}}\",\"productVersion\": \"{{AMIVersion}}\"}"
+                                            ]
+                                        ]
+                                    }
+                                }
+                              },
+
+                              {
+                                  "name": "sleep",
+                                  "action": "aws:sleep",
+                                  "inputs": {
+                                      "Duration": "PT01M"
+                                  }
+                              },
+
+                              {
+                                  "name": "addNewVersionParameter",
+                                  "action": "aws:invokeLambdaFunction",
+                                  "timeoutSeconds": 1200,
+                                  "maxAttempts": 1,
+                                  "onFailure": "Abort",
+                                  "inputs": {
+                                      "FunctionName":{ "Ref": "AppendParamLambda"},
+
+                                      "Payload": "{\"parameterName\":\"/GoldenAMI/{{productOSAndVersion}}/{{productName}}/{{AMIVersion}}\", \"action\":\"overwrite\", \"valueToBeCreatedOrAppended\":\"{{ImageAmiId}}\"}"
+                                  }
+                              },
+
+                              {
+                                  "name": "approve",
+                                  "action": "aws:approve",
+                                  "timeoutSeconds": 172800,
+                                  "onFailure": "Abort",
+                                  "inputs": {
+                                      "NotificationArn": "{{ ApproverNotificationArn }}",
+                                      "Message": "Please check your report from Qualys, and decide whether to approve {{productOSAndVersion}} Candidate AMI: {{ImageAmiId}}, Instance ID: {{createInstanceFromNewImage.InstanceIds}}, Qualys Asset Tag: GAP {{ImageAmiId}} {{createInstanceFromNewImage.InstanceIds}}",
+                                      "MinRequiredApprovals": 1,
+                                      "Approvers": [ "{{ApproverUserIAMARN}}" ]
+                                  }
+                              },
+
+                              {
+                                  "name": "updateLatestVersionValue",
+                                  "action": "aws:invokeLambdaFunction",
+                                  "timeoutSeconds": 1200,
+                                  "maxAttempts": 1,
+                                  "onFailure": "Abort",
+                                  "inputs": {
+                                      "FunctionName":{ "Ref": "AppendParamLambda"},
+                                      "Payload": "{\"parameterName\":\"/GoldenAMI/{{productOSAndVersion}}/latest\", \"action\":\"overwrite\", \"valueToBeCreatedOrAppended\":\"{{ImageAmiId}}\"}"
+                                  }
+                              },
+
+                              {
+                                "maxAttempts": 1,
+                                "inputs": {
+                                  "DesiredState": "terminated",
+                                  "InstanceIds": [
+                                    "{{ createInstanceFromNewImage.InstanceIds }}"
+                                  ]
+                                },
+                                "name": "terminateQualysInstance",
+                                "action": "aws:changeInstanceState",
+                                "timeoutSeconds": 1200,
+                                "onFailure": "Continue"
+                              },
+
+                              {
+                                "name":"TriggerCopyandShareAMI",
+                                "action":"aws:invokeLambdaFunction",
+                                "timeoutSeconds":1200,
+                                "maxAttempts":1,
+                                "onFailure":"Abort",
+                                "inputs":{
+                                   "FunctionName": "TriggerCopyandShareAMI",
+                                   "Payload":"{\"Status\":\"approved\", \"amiID\":\"{{ImageAmiId}}\", \"buildVersion\":\"{{AMIVersion}}\", \"productName\":\"{{productName}}\", \"productOSAndVersion\":\"{{productOSAndVersion}}\"}"
+                                }
+                              }
+                          ]
+                      }
+                  }
+              },
+ 
+      "CopyToMultipleAccountsLambdaExecutionRole":{
+                "Type":"AWS::IAM::Role",
+                "Properties":{
+                   "PermissionsBoundary": { "Fn::Join":
+                   [
+                       "",
+                        [
+                           "arn:aws:iam:",
+                            ":",
+                            {
+                            "Ref":"AWS::AccountId"
+                            },
+                            ":policy/",
+                            { 
+                            "Ref":"iamrolepb" 
+                            }
+                        ]
+                   ]},
+                   "ManagedPolicyArns":[
+                      "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                   ],
+                   "AssumeRolePolicyDocument":{
+                      "Version":"2012-10-17",
+                      "Statement":[
+                         {
+                            "Effect":"Allow",
+                            "Principal":{
+                               "Service":[
+                                  "lambda.amazonaws.com"
+                               ]
+                            },
+                            "Action":[
+                               "sts:AssumeRole"
+                            ]
+                         }
+                      ]
+                   },
+                   "Path":"/",
+                   "Policies":[
+                      {
+                         "PolicyName":"CopyToMultipleAccountsLambdaExecutionPolicy",
+                         "PolicyDocument":{
+                            "Version":"2012-10-17",
+                            "Statement":[
+                               {
+                                  "Effect":"Allow",
+                                  "Action":["ssm:GetParameter*","ssm:PutParameter*"],
+                                  "Resource":{ "Fn::Join":
+                                   [
+                                       "",
+                                       [
+                                           "arn:aws:ssm:", "*",
+                                           ":",
+                                           {
+                                               "Ref":"AWS::AccountId"
+                                           },
+                                           ":parameter/GoldenAMI/*"
+                                       ]
+                                   ]}
+                               },
+                               {
+                                  "Effect":"Allow",
+                                  "Action":["sts:AssumeRole"],
+                                  "Resource": { "Fn::Join":
+                                    [
+                                      "",
+                                      [
+                                        "arn:aws:iam::*:role/",
+                                        {
+                                          "Ref":"roleName"
+                                          }
+                                          ]
+                                         ]
+                                       }
+                               },
+                               {
+                                  "Effect":"Allow",
+                                  "Action":["ec2:ModifyImageAttribute"],
+                                  "Resource":"*"
+                               }
+                            ]
+                         }
+                      }
+                   ]
+                }
+             },
+ 
+      "CopyToMultipleAccountsLambdaFunction":{
+                "Type":"AWS::Lambda::Function",
+                "Properties":{
+                   "Role":{
+                      "Fn::GetAtt":[
+                         "CopyToMultipleAccountsLambdaExecutionRole",
+                         "Arn"
+                      ]
+                   },
+                   "Code":{
+                      "ZipFile":{
+                         "Fn::Join":[
+                            "",
+                            [
+                               "import boto3",
+                               "\n","import json",
+                               "\n","from dateutil import parser",
+                               "\n","import dateutil",
+                               "\n","import datetime",
+                               "\n","import collections",
+                               "\n","import os",
+                               "\n","import logging",                               
+                               "\n","import botocore",
+                               "\n","logger = logging.getLogger()",
+                               "\n","logger.setLevel(logging.INFO)",
+                               "\n","def lambda_handler(event, context):",
+                               "\n","    ssm = boto3.client('ssm',os.environ['AWS_DEFAULT_REGION'])",
+                               "\n","    ShareAMIto = os.environ['ShareAMIto']",
+                               "\n","    MasterAccountID = os.environ['MasterAccountID']",
+                               "\n","    accountMetadata = json.loads(event['MetadataJSON'])",
+                               "\n","    productOSAndVersion = event['productOSAndVersion']",
+                               "\n","    roleArnPrefix='arn:aws:iam::';",
+                               "\n","    roleArnSuffix=':role/",{"Ref":"roleName"},"';",
+                               "\n","    amiIDParamNameToCreate=event['AmiIDParamName'] ",
+                               "\n","    # loop over account details.",
+                               "\n","    ssm = boto3.client('ssm')",
+                               "\n","    ssm.put_parameter(Name=amiIDParamNameToCreate+'/copyMetadata',Value=event['MetadataJSON'],Type='String',Overwrite=True)",
+                               "\n","    amiIdParam = ssm.get_parameter(Name=amiIDParamNameToCreate)",
+                               "\n","    amiId = amiIdParam['Parameter']['Value']",
+                               "\n","    SELF_ACCOUNT_ID = context.invoked_function_arn.split(':')[4]",
+                               "\n","    if ( ShareAMIto == 'Organization'):",
+                               "\n","        for orgID, regions in accountMetadata.items():",
+                               "\n","            if orgID:",
+                               "\n","                roleArn =roleArnPrefix+SELF_ACCOUNT_ID+roleArnSuffix ",
+                               "\n","                regionList = regions.split(',')",
+                               "\n","                for region in regionList:",
+                               "\n","                    logger.info('Sharing AMI {} to Organization: {} in {} region'.format(amiId,orgID,region))",
+                               "\n","                    ec2Client = boto3.client('ec2',region)",
+                               "\n","                    orgIDArn = 'arn:aws:organizations::' + MasterAccountID + ':organization/' + orgID",
+                               "\n","                    ec2Client.modify_image_attribute(ImageId=amiId,LaunchPermission={'Add': [{ 'OrganizationArn': orgIDArn }]})",
+                               "\n","                    ssm = boto3.client('ssm',region)",
+                               "\n","                    try:",
+                               "\n","                        ssm.put_parameter(Name='/GoldenAMI/' + productOSAndVersion + '/latest',Type='String', Value=amiId,Overwrite=True)",
+                               "\n","                    except botocore.exceptions.ClientError as e:",
+                               "\n","                        if e.response['Error']['Code'] == 'ParameterNotFound':",
+                               "\n","                            ssm.put_parameter(Name='/GoldenAMI/' + productOSAndVersion + '/latest',Type='String', Value=amiId,Overwrite=True)",
+                               "\n","                    response = ssm.put_parameter(Name=amiIDParamNameToCreate,Value=amiId,Type='String',Overwrite=True)",
+                               "\n","        return 'Done'"
+                            ]
+                         ]
+                      }
+                   },
+                   "Environment": {
+                     "Variables": {
+                       "ShareAMIto": { "Ref":"ShareAMIto" },
+                       "MasterAccountID": { "Ref":"MasterAccountID" }
+                     }
+                   },
+                   "Runtime":"python3.9",
+                   "Timeout":300,
+                   "Handler":"index.lambda_handler",
+                   "MemorySize":512
+                }
+             },
+
+      "CopyAndShareAMI":{
+                "Type":"AWS::SSM::Document",
+                "Properties":{
+                   "DocumentType":"Automation",
+                   "Name": "Eiger-GoldenAMICopyAndShare",
+                   "Content":{
+                      "description":"This automation document triggers a workflow to copy and share the golden AMI with other regions/accounts",
+                      "schemaVersion":"0.3",
+                      "assumeRole":{
+                               "Fn::GetAtt": [
+                                   "AutomationServiceRole",
+                                   "Arn"
+                               ]
+                           },
+                      "parameters":{
+ 
+                         "MetadataJSON":{
+                            "type":"String",
+                            "description":"This parameter contains details of accounts and regions with which AMI needs to be shared. Kindly do not change the structure of the JSON",
+                            "default":{"Ref":"MetadataJSON"}
+                         },
+                         "bucketName":{
+                            "type":"String",
+                            "description":"This parameter contains name of the bucket in which template file is stored",
+                            "default":{"Ref":"GoldenAMIConfigBucket"}
+                          },
+                         "templateFileName":{
+                            "type":"String",
+                            "description":"This parameter contains name of the template file",
+                            "default":"simpleEC2-SSMParamInput.json"
+                         },
+                         "productName":{
+                            "type":"String",
+                            "description":"The syntax of this parameter is ProductName-ProductVersion",
+                            "default":{ "Ref": "productName" }
+                         },
+                         "productOSAndVersion":{
+                            "type":"String",
+                            "description":"The syntax of this parameter is OSName-OSVersion",
+                            "default":{ "Ref": "productOSAndVersion" }
+                         },
+                         "buildVersion":{
+                            "type":"String",
+                            "description":"This is the build number of the golden AMI to be distributed",
+                            "default":{ "Ref": "buildVersion" }
+                         },
+                         "MetadataParamName":{
+                            "type":"String",
+                            "description":"This parameter points to an SSM parameter used for storing some process specific metadata. Kindly Do not change the default value.",
+                            "default": "/GoldenAMI/{{productOSAndVersion}}/{{productName}}/{{buildVersion}}/temp"
+                         }
+                      },
+                      "mainSteps":[
+                         {
+                            "name":"shareAmiWithAccounts",
+                            "action":"aws:invokeLambdaFunction",
+                            "timeoutSeconds":1200,
+                            "maxAttempts":1,
+                            "onFailure":"Abort",
+                            "inputs":{
+                               "FunctionName":{ "Ref": "CopyToMultipleAccountsLambdaFunction" },
+                               "Payload":"{\"MetadataJSON\":\"{{ MetadataJSON }}\",\"productName\":\"{{ productName }}\",\"productOSAndVersion\":\"{{ productOSAndVersion }}\",\"AmiIDParamName\":\"/GoldenAMI/{{productOSAndVersion}}/{{productName}}/{{buildVersion}}\",\"MetadataParamName\":\"{{ MetadataParamName }}\"}"
+                            }
+                         }
+                      ],
+                      "outputs":[
+                         "shareAmiWithAccounts.LogResult"
+                      ]
+                   }
+                }
+      } 
+    }
+}

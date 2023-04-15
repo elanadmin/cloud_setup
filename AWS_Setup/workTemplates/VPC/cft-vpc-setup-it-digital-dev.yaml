@@ -1,0 +1,596 @@
+Description:  This template deploys a VPC, with eightteen private subnets and 2 public subnets.
+
+Parameters:
+  EnvironmentName:
+    Description: An environment name that is prefixed to resource names
+    Type: String
+
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.95.0.0/20
+
+  PrivateSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.0.0/24
+    
+  PrivateSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.1.0/24
+    
+  PrivateSubnet3CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.2.0/24
+  
+  PrivateSubnet4CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.3.0/24
+    
+  PrivateSubnet5CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.4.0/24
+ 
+  PrivateSubnet6CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.5.0/24
+  
+  PrivateSubnet7CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.6.0/25
+    
+  PrivateSubnet8CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.6.128/25
+     
+  PrivateSubnet9CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.7.0/25 
+  
+  PrivateSubnet10CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.7.128/25
+    
+  PrivateSubnet11CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.8.0/25
+
+  PrivateSubnet12CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.8.128/25
+    
+  PrivateSubnet13CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.9.0/25
+    
+  PrivateSubnet14CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.9.128/25 
+    
+  PrivateSubnet15CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.10.0/25    
+  
+  PrivateSubnet16CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.10.128/25 
+    
+  PrivateSubnet17CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.11.0/25
+
+  PrivateSubnet18CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.11.128/25
+
+  PublicSubnet19CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.95.12.0/26
+
+  PublicSubnet20CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
+    Type: String
+    Default: 10.95.12.64/26
+
+  CreateIGW:
+    Description: Please Select if Internet Gateway is Required. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+
+  CreateIGWRoute:
+    Description: Please Select if Internet Gateway Routes are Required in Public Subnet Route Table. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+
+Conditions:
+  CreateIGW: !Equals
+    - !Ref CreateIGW
+    - true
+
+  CreateIGWRoute: !Equals
+    - !Ref CreateIGWRoute
+    - true
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+  
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-frontend1  (AZ1)
+
+      
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-frontend1  (AZ1)
+          
+          
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-frontend2 (AZ2)
+      
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-frontend2  (AZ2)
+          
+          
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 2, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet3CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-backend1 (AZ1)
+
+
+  PrivateRouteTable3:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-backend1 (AZ1)
+          
+
+  PrivateSubnet4:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 3, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet4CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-backend2 (AZ2)
+
+ 
+  PrivateRouteTable4:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-backend2 (AZ2)
+          
+          
+  PrivateSubnet5:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 4, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet5CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-app1 (AZ1)
+
+      
+  PrivateRouteTable5:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-app1 (AZ1)
+          
+          
+  PrivateSubnet6:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 5, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet6CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-app2 (AZ2)
+
+      
+  PrivateRouteTable6:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-app2 (AZ2)
+          
+   
+  PrivateSubnet7:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet7CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-frontend3  (AZ3)
+
+      
+  PrivateRouteTable7:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-frontend3  (AZ3)
+          
+          
+  PrivateSubnet8:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet8CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-frontend4 (AZ4)
+
+      
+  PrivateRouteTable8:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-frontend4  (AZ4)
+          
+          
+  PrivateSubnet9:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 2, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet9CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-frontend5 (AZ5)
+
+      
+  PrivateRouteTable9:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-frontend5 (AZ5)
+          
+          
+  PrivateSubnet10:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 3, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet10CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-frontend6 (AZ6)
+
+      
+  PrivateRouteTable10:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-frontend6 (AZ6)
+          
+          
+  PrivateSubnet11:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 4, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet11CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-backend3 (AZ3)
+
+      
+  PrivateRouteTable11:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-backend3 (AZ3)
+          
+          
+  PrivateSubnet12:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 5, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet12CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-backend4 (AZ4)
+
+      
+  PrivateRouteTable12:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-backend4 (AZ4)
+          
+          
+  PrivateSubnet13:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet13CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-backend5  (AZ5)
+
+      
+  PrivateRouteTable13:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-backend5  (AZ5)
+          
+          
+  PrivateSubnet14:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet14CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-backend6 (AZ6)
+
+      
+  PrivateRouteTable14:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-backend6 (AZ6)
+          
+          
+  PrivateSubnet15:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 2, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet15CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-app3 (AZ3)
+
+      
+  PrivateRouteTable15:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-app3 (AZ3)
+          
+          
+  PrivateSubnet16:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 3, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet16CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-app4 (AZ4)
+
+      
+  PrivateRouteTable16:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-app4 (AZ4)
+          
+          
+  PrivateSubnet17:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 4, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet17CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-app5 (AZ5)
+
+       
+  PrivateRouteTable17:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-app5 (AZ5)
+          
+          
+  PrivateSubnet18:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 5, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnet18CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-app6 (AZ6)
+
+
+  PrivateRouteTable18:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-app6 (AZ6)
+
+
+  PublicSubnet19:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: !Ref PublicSubnet19CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-internet-us-east-1a
+
+
+  PublicSubnet20:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PublicSubnet20CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-internet-us-east-1b
+
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: CreateIGW
+
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+    Condition: CreateIGW
+
+  
+  PublicRouteTable19:
+    Type: AWS::EC2::RouteTable
+    Condition: CreateIGWRoute
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-internet-us-east-1a
+
+
+  PublicRoute19:
+    Type: AWS::EC2::Route
+    Condition: CreateIGWRoute
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable19
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+
+  PublicSubnetRouteTableAssociation19:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateIGWRoute
+    Properties:
+      RouteTableId: !Ref PublicRouteTable19
+      SubnetId: !Ref PublicSubnet19
+
+
+  PublicRouteTable20:
+    Type: AWS::EC2::RouteTable
+    Condition: CreateIGWRoute
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName} digital-dev-internet-us-east-1b
+
+
+  PublicRoute20:
+    Type: AWS::EC2::Route
+    Condition: CreateIGWRoute
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable20
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+
+  PublicSubnetRouteTableAssociation20:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateIGWRoute
+    Properties:
+      RouteTableId: !Ref PublicRouteTable20
+      SubnetId: !Ref PublicSubnet20

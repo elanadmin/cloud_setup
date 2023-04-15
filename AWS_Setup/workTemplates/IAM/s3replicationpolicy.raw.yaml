@@ -1,0 +1,87 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "SrcS3Policy",
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:GetReplicationConfiguration",
+                "s3:PutInventoryConfiguration",
+                "s3:ListBucket",
+                "s3:GetObject",
+                "s3:GetObjectVersion",
+                "s3:GetObjectAcl",
+                "s3:GetObjectTagging",
+                "s3:GetObjectVersionForReplication",
+                "s3:GetObjectVersionAcl",
+                "s3:GetObjectVersionTagging",
+                "s3:InitiateReplication",
+                "s3:ReplicateObject",
+                "s3:ReplicateTags",
+                "s3:AbortMultipartUpload"
+            ],
+            "Resource": [
+                "arn:aws:s3:::sdv-aws-marketingautomation",
+                "arn:aws:s3:::sdv-aws-marketingautomation/*"
+            ]
+        },
+        {
+            "Sid": "DstS3Policy",
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:PutObjectAcl",
+                "s3:PutObjectVersionAcl",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:DeleteObjectTagging",
+                "s3:DeleteObjectVersionTagging",
+                "s3:ReplicateDelete",
+                "s3:ReplicateObject",
+                "s3:List*",
+                "s3:GetBucketVersioning",
+                "s3:PutBucketVersioning",
+                "s3:GetBucketObjectLockConfiguration",
+                "s3:PutObjectRetention",
+                "s3:BypassGovernanceRetention",
+                "s3:PutObjectLegalHold",
+                "s3:RestoreObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::unso-s3-dev-di-replicationtest",
+                "arn:aws:s3:::unso-s3-dev-di-replicationtest/*"
+            ]
+        },
+        {
+            "Sid": "SrcKMSPolicy",
+            "Effect": "Allow",
+            "Action": [
+                "kms:GetParametersForImport",
+                "kms:DescribeCustomKeyStores",
+                "kms:ListKeys",
+                "kms:GetPublicKey",
+                "kms:ListKeyPolicies",
+                "kms:ListRetirableGrants",
+                "kms:GetKeyRotationStatus",
+                "kms:ListAliases",
+                "kms:GetKeyPolicy",
+                "kms:DescribeKey",
+                "kms:ListResourceTags",
+                "kms:ListGrants"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "SrcIAMPolicy",
+            "Effect": "Allow",
+            "Action": [
+                "iam:GetRole",
+                "iam:PassRole"
+            ],
+            "Resource": [
+                "arn:aws:iam::558420267243:role/S3-Replication-Batch-Ops-Role"
+            ]
+        }
+    ]
+}

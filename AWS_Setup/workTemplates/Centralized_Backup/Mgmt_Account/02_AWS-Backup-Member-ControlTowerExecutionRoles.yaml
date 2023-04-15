@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  This StackSet Template Creates ControlTower Execution Role for AWS Backup and Other ControlTower Operations.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: AWS Member Account Backup Configuration
+        Parameters:
+          - pMemberTagKey
+          - pMemberTagValue
+    ParameterLabels:
+      pMemberTagKey:
+        default: Enter a Tag Key
+      pMemberTagValue:
+        default: Enter a Tag Value
+Parameters:
+  AdministratorAccountId:
+    Type: String
+    Description: AWS Account Id of the Management Account (the account in which StackSet is managed from).
+    MaxLength: 12
+    MinLength: 12
+    Default: "188206870753"
+  ControlTowerExecutionRole:
+    Type: String
+    Description: This is the IAM Execution Role .
+    Default: AWSControlTowerExecution
+  pMemberTagKey:
+    Type: String
+    Description: This is the tag key to assign to resources.
+    Default: managedby
+  pMemberTagValue:
+    Type: String
+    Description: This is the tag value to assign to resources.
+    Default: cloud_and_automation_team
+
+Resources:
+  AWSControlTowerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref ControlTowerExecutionRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !Ref AdministratorAccountId
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
+      Tags:
+         - Key: !Ref pMemberTagKey
+           Value: !Ref pMemberTagValue  
+          
+Outputs:
+  oAWSControlTowerExecutionRole:
+    Value: !Ref AWSControlTowerExecutionRole

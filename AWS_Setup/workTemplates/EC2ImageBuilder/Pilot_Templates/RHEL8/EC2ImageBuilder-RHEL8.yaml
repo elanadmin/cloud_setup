@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Metadata:
+    Generator: "former2"
+Description: "EC2 Image Builder i.e Golden Image Creation Template for RedHat Enterprise Linux8 EC2 Instances."
+
+Parameters:
+  ImageRecipeVersion:
+    Description: EC2 ImageBuilder ImageRecipe Version. 
+    Type: String
+    Default: "1.0.0"
+    AllowedPattern: "[0-9].[0.9].[0-9]"
+
+  ParentImageID:
+    Description: EC2 ImageBuilder ImageRecipe Version. 
+    Type: String
+    Default: "arn:aws:imagebuilder:us-east-1:aws:image/red-hat-enterprise-linux-8-x86/x.x.x"
+  
+  EBSEncryptionKey:
+    Description: "Name of the EC2 EBS Encryption Key."
+    Type: String
+    Default: "alias/ebs_makey"
+
+  ImageBuilderDistributionConfigurationName:
+    Description: "Name of the ImageBuilder Distribution Config."
+    Type: String
+    Default: "rhel-8-golden"
+
+  ImageBuilderImageRecipeName:
+    Description: "Name of the ImageBuilder Recipe Config."
+    Type: String
+    Default: "rhel-8-golden"
+
+  ImageBuilderInfrastructureConfigurationName:
+    Description: "Name of the ImageBuilder Infrastructure Config."
+    Type: String
+    Default: "linux-infrastructure-golden"
+  
+  OrganizationalUnitARNS:
+    Description: "Organizational Unit ARN's To Share the AMI to."
+    Type: CommaDelimitedList
+    Default: arn:aws:organizations::188206870753:ou/o-980c72tm8e/ou-o8tt-rn48gyv3, arn:aws:organizations::188206870753:ou/o-980c72tm8e/ou-o8tt-7cu9j0xy, arn:aws:organizations::188206870753:ou/o-980c72tm8e/ou-o8tt-ph9mxujn
+
+Resources:
+    ImageBuilderImagePipeline:
+        Type: "AWS::ImageBuilder::ImagePipeline"
+        DependsOn:
+          - ImageBuilderImageRecipe
+          - ImageBuilderDistributionConfiguration
+        Properties:
+            Name: "RHEL_8_Golden"
+            Description: "RHEL_8_Golden Pipeline"
+            ImageRecipeArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:image-recipe/${ImageBuilderImageRecipeName}/1.0.0"
+            InfrastructureConfigurationArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:infrastructure-configuration/${ImageBuilderInfrastructureConfigurationName}"
+            DistributionConfigurationArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:distribution-configuration/${ImageBuilderDistributionConfigurationName}"
+            ImageTestsConfiguration: 
+                ImageTestsEnabled: true
+                TimeoutMinutes: 720
+            Status: "ENABLED"
+            Tags: 
+                Purpose: "GoldenImage"
+                Platform: "RHEL7"
+
+    ImageBuilderImageRecipe:
+        Type: "AWS::ImageBuilder::ImageRecipe"
+        Properties:
+            Name: !Ref ImageBuilderImageRecipeName
+            Description: "RHEL_8_Golden Image Recipe"
+            Version: !Ref ImageRecipeVersion
+            Components: 
+              -
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:component/misc-prerun-scripts/x.x.x"
+              - 
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:aws:component/update-linux/1.0.1/1"
+              - 
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:aws:component/aws-cli-version-2-linux/x.x.x"
+              - 
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:component/cb-psc-sensor-agent/x.x.x"
+              - 
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:component/qualys-cloud-agent/x.x.x"
+              - 
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:aws:component/amazon-cloudwatch-agent-linux/x.x.x"
+              - 
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:component/mde-cloud-agent/x.x.x"
+              -
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:component/misc-postrun-scripts/x.x.x"
+              -
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:${AWS::AccountId}:component/cis-compliance-checks-linux/x.x.x"
+              - 
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:aws:component/reboot-test-linux/x.x.x"
+              - 
+                ComponentArn: !Sub "arn:aws:imagebuilder:${AWS::Region}:aws:component/simple-boot-test-linux/x.x.x"
+            ParentImage: !Ref ParentImageID
+            BlockDeviceMappings: 
+              - 
+                DeviceName: "/dev/xvda"
+                Ebs: 
+                    DeleteOnTermination: true
+                    Encrypted: true
+                    KmsKeyId: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:${EBSEncryptionKey}"
+                    VolumeSize: 10
+                    VolumeType: "gp2"
+              -
+                DeviceName: "/dev/xvdf"
+                Ebs: 
+                    DeleteOnTermination: true
+                    Encrypted: true
+                    KmsKeyId: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:${EBSEncryptionKey}"
+                    VolumeSize: 20
+                    VolumeType: "gp2"
+            Tags: 
+                Purpose: "GoldenImage"
+                Platform: "RHEL8"
+            WorkingDirectory: "/var/tmp"
+
+    ImageBuilderDistributionConfiguration:
+        Type: "AWS::ImageBuilder::DistributionConfiguration"
+        Properties:
+            Name: !Ref ImageBuilderDistributionConfigurationName
+            Description: "RHEL_8_Golden Distribution"
+            Distributions: 
+              - 
+                Region: !Ref AWS::Region
+                AmiDistributionConfiguration: 
+                    Name: "RHEL_8_Golden {{imagebuilder:buildDate}}"
+                    Description: "RHEL_8_Golden Distribution"
+                    AmiTags:
+                        Purpose: 'GoldenImage'
+                        Platform: 'RHEL7'
+                    LaunchPermissionConfiguration: 
+                        OrganizationalUnitArns: !Ref OrganizationalUnitARNS
+            Tags:
+                Purpose: "GoldenImage"
+                Platform: "RHEL8"

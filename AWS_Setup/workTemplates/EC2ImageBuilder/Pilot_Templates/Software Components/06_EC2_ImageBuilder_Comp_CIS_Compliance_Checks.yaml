@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Metadata:
+    Generator: "former2"
+Description: "EC2 ImageBuilder Component for CIS Compliance Checks"
+
+Parameters: 
+  s3downloadbucket:
+    Description: "Name of the S3 Bucket to download data from"
+    Type: String
+    Default: "ec2imagebuilder-eiger-infra"
+
+Resources:
+    ImageBuilderComponent:
+        Type: "AWS::ImageBuilder::Component"
+        Properties:
+            Name: "cis-compliance-checks-linux"
+            Description: "Run CIS Compliance Checks."
+            Version: "1.0.0"
+            Platform: "Linux"
+            Tags:
+              Purpose: "GoldenImage"
+              Platform: "Linux"
+            Data: |
+              name: cis-compliance-checks-linux
+              description: This Component Demonstrates How To Download and Execute an Ansible CIS Playbook on Linux Platforms.
+              schemaVersion: 1.0
+
+              parameters:
+                - s3_download_bucket:
+                    type: string
+                    default: 'ec2imagebuilder-eiger-pilot'
+                    description: S3 Bucket to Download Data From.
+
+                - amzn_ansible:
+                    type: string
+                    default: 'ansible2'
+                    description: Ansible Package Name and Version for AmazonLinux Family.
+            
+                - rhel_ansible:
+                    type: string
+                    default: 'ansible'
+                    description: AnsiblePackage Name and Version for RedHat Family.
+
+              phases:
+
+                - name: build
+                  steps:
+                    - name: Fail
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - echo 1
+                      
+                    - name: OperatingSystemRelease
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            FILE=/etc/os-release
+                            if [ -e $FILE ]; then
+                              . $FILE
+                              MAJOR_VERSION=$(echo $VERSION_ID | grep -o ^[0-9])
+                              echo "$ID${MAJOR_VERSION:+${MAJOR_VERSION}}"
+                            else
+                              echo "The file $FILE does not exist. Failing build."
+                              exit {{ build.Fail.outputs.stdout }}
+                            fi
+                  
+                    - name: OperatingSystemArchitecture
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            ARCH=$(uname -m)
+                            if [ `echo $ARCH | grep -Ev '^(aarch64|x86_64)'` ]; then
+                              echo "The '$ARCH' architecture is not supported. Failing build."
+                              exit {{ build.Fail.outputs.stdout }}
+                            fi
+                            echo $ARCH
+
+                    - name: InstallAnsible
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            os_release={{ build.OperatingSystemRelease.outputs.stdout }}
+                            if [[ $os_release = amzn[2-9] ]];then
+                              ansible={{amzn_ansible}}
+                              sudo amazon-linux-extras install -y ${ansible}
+                            elif [[ $os_release = rhel[7-9] ]];then
+                              ansible={{rhel_ansible}}
+                              sudo yum install -y ${ansible}
+                            else
+                              echo -e "\nDoesn't Support this OperatingSystem\n"
+                              exit {{ build.Fail.outputs.stdout }}
+                            fi
+
+                    - name: CreateDirectory
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - sudo mkdir -p /var/tmp/ansibleloc/roles
+
+                    - name: DownloadLinuxCis
+                      action: S3Download
+                      inputs:
+                        - source: 's3://{{ s3_download_bucket }}/CIS/{{ build.OperatingSystemRelease.outputs.stdout }}/linux-cis.zip'
+                          destination: '/var/tmp/ansibleloc/linux-cis.zip'
+
+                    - name: UzipLinuxCis
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - unzip /var/tmp/ansibleloc/linux-cis.zip -d /var/tmp/ansibleloc
+                          - echo "unzip linux-cis file"
+
+                    - name: DownloadCisPlaybook
+                      action: S3Download
+                      inputs:
+                        - source: 's3://{{ s3_download_bucket }}/CIS/{{ build.OperatingSystemRelease.outputs.stdout }}/playbook.yaml'
+                          destination: '/var/tmp/ansibleloc/playbook.yaml'
+
+                    - name: InvokeCisAnsible
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            export ANSIBLE_LOG_PATH=/var/tmp/ansible.log
+                            export ANSIBLE_DEBUG=True 
+                            sudo ansible-playbook {{ build.DownloadCisPlaybook.inputs[0].destination }} --tags=level-1,level-2
+    
+                - name: validate
+                  steps:
+                    - name: ValidateDebug
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - sudo echo "ValidateDebug section"
+
+                - name: test
+                  steps:
+                    - name: TestDebug
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - sudo echo "TestDebug section"
+
+                    - name: Download_Inspector_Test
+                      action: S3Download
+                      inputs:
+                        - source: 's3://ec2imagebuilder-managed-resources-us-east-1-prod/components/inspector-test-linux/1.0.1/InspectorTest'
+                          destination: '/var/tmp/InspectorTest'
+
+                    - name: Set_Executable_Permissions
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - sudo chmod +x /var/tmp/InspectorTest

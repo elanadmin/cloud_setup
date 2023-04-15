@@ -1,0 +1,94 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "AWS CloudFormation template for IAM Roles and Policies for SecurityGroup and Tags Migration.",
+    "Parameters": {
+        "SRCAccountID": {
+            "Description": "Source AccountID needs to Assume Destination Role",
+            "Type": "String",
+            "Default": "558420267243"
+        },
+        "SRCAcUser": {
+            "Description": "Source Account IAM User needs to Assume Destination Role",
+            "Type": "String",
+            "Default": "ec2migrate"
+        },
+        "DstAcPolicy": {
+            "Description": "Destination Account IAM PolicyName",
+            "Type": "String",
+            "Default": "ec2migrate"
+        },
+        "DstAcRole": {
+            "Description": "Destination Account IAM Role",
+            "Type": "String",
+            "Default": "ec2migrate"
+        }   
+    },
+    "Resources": {
+        "DstIAMRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": { "Ref" : "DstAcRole" },
+                "Description" : "IAM Role to Migrate SecurityGroups and Tags from Src Account.",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": { "Fn::Sub": "arn:aws:iam::${SRCAccountID}:user/${SRCAcUser}" }
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": { "Ref" : "DstAcPolicy" },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "EC2Actions",
+                                    "Action": [
+                                        "ec2:AuthorizeSecurityGroupIngress",
+                                        "ec2:DescribeInstances",
+                                        "ec2:DeleteTags",
+                                        "ec2:DescribeInstanceAttribute",
+                                        "ec2:DescribeSpotInstanceRequests",
+                                        "ec2:UpdateSecurityGroupRuleDescriptionsIngress",
+                                        "ec2:DescribeVolumeStatus",
+                                        "ec2:DescribeInstanceTypeOfferings",
+                                        "ec2:CreateSecurityGroup",
+                                        "ec2:DescribeVolumes",
+                                        "ec2:DescribeReservedInstances",
+                                        "ec2:DescribeReservedInstancesListings",
+                                        "ec2:DescribeInstanceStatus",
+                                        "ec2:AuthorizeSecurityGroupEgress",
+                                        "ec2:UpdateSecurityGroupRuleDescriptionsEgress",
+                                        "ec2:DescribeIamInstanceProfileAssociations",
+                                        "ec2:CreateTags",
+                                        "ec2:DescribeReservedInstancesOfferings",
+                                        "ec2:DescribeReplaceRootVolumeTasks",
+                                        "ec2:ModifySecurityGroupRules",
+                                        "ec2:DescribeVolumeAttribute",
+                                        "ec2:DescribeSecurityGroups",
+                                        "ec2:DescribeSecurityGroupRules",
+                                        "ec2:DescribeSecurityGroupReferences",
+                                        "ec2:DescribeInstanceTypes",
+                                        "ec2:DescribeReservedInstancesModifications",
+                                        "ec2:DescribeStaleSecurityGroups"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}

@@ -1,0 +1,287 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Metadata:
+    Generator: "former2"
+Description: "Create EC2 Instances for PatchTest Certification Using Latest Golden Image AMI's."
+
+Parameters:
+  AmznInstanceReq:
+    Description: Choose if Amzn Linux Instance Needs to be Created. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+
+  LatestAmznAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/ec2-imagebuilder/amazonlinux-2-golden/latest'
+  
+  DefaultSubnetID:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Subnet::Id>'
+    Default: 'defaultSubnetId'
+
+  DefaultVPCID:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::VPC::Id>'
+    Default: 'defaultVPCId'
+  
+  AmznInstanceName:
+    Description: "Amzn Linux Instance Name."
+    Type: String
+    Default: "Patch-Test-Instance-AMZN2"
+  
+  RHEL8InstanceReq:
+    Description: Choose if RHEL8 Linux Instance Needs to be Created. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+
+  LatestRhel8AmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/ec2-imagebuilder/rhel-8-golden/latest'
+  
+  RHEL8InstanceName:
+    Description: "RHEL8 Linux Instance Name."
+    Type: String
+    Default: "Patch-Test-Instance-RHEL8"
+
+  InstanceType:
+    Description: "Amzn Linux Instance Type."
+    Type: String
+    Default: "t3.medium"
+  
+  KeyPairName:
+    Description: "Amzn Linux Instance KeyPair."
+    Type: String
+    Default: "ec2imagebuilder"
+  
+  SecurityGroupName:
+    Description: "Amzn Linux Instance SecurityGroup Name."
+    Type: String
+    Default: "patchtest-sg"
+
+  CreateIMDSv2LaunchTemplate:
+    Description: Please Select if Creation of IMDSv2 LaunchTemplate is Required. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+
+Conditions:
+  AmznInstanceReq: !Equals
+    - !Ref AmznInstanceReq
+    - true
+
+  RHEL8InstanceReq: !Equals
+    - !Ref RHEL8InstanceReq
+    - true
+  
+  CreateIMDSv2LaunchTemplate: !Equals
+    - !Ref CreateIMDSv2LaunchTemplate
+    - true
+
+Resources:
+
+    IMDSv2LaunchTemplate:
+        Type: AWS::EC2::LaunchTemplate
+        Condition: CreateIMDSv2LaunchTemplate
+        Properties:
+            LaunchTemplateName: IMDSv2
+            LaunchTemplateData:
+              MetadataOptions:
+                HttpEndpoint: enabled
+                HttpPutResponseHopLimit: 1
+                HttpTokens: required
+              TagSpecifications:  
+                - ResourceType: instance
+                  Tags: 
+                    - Key: "Owner"
+                      Value: "Infrastructure"
+                    - Key: "Environment"
+                      Value: "Sandbox"
+                    - Key: "Application"
+                      Value: "PatchTest"
+                    - Key: "Backup"
+                      Value: "No"
+                    - Key: "Patching"
+                      Value: "Yes"
+                    - Key: "BuiltFromGI"
+                      Value: "No"      
+
+    EC2SecurityGroup:
+        Type: "AWS::EC2::SecurityGroup"
+        Properties:
+            GroupDescription: "Patch Test SecurityGroup"
+            GroupName: !Ref SecurityGroupName
+            VpcId: !Ref DefaultVPCID
+            SecurityGroupIngress: 
+              - 
+                CidrIp: "10.0.0.0/8"
+                FromPort: 80
+                IpProtocol: "tcp"
+                ToPort: 80
+              - 
+                CidrIp: "10.0.0.0/8"
+                Description: ""
+                FromPort: 22
+                IpProtocol: "tcp"
+                ToPort: 22
+              - 
+                CidrIp: "10.0.0.0/8"
+                FromPort: 443
+                IpProtocol: "tcp"
+                ToPort: 443
+            SecurityGroupEgress: 
+              - 
+                CidrIp: "0.0.0.0/0"
+                IpProtocol: "-1"
+
+    AmznEC2Instance:
+        Type: "AWS::EC2::Instance"
+        Condition: AmznInstanceReq
+        Properties:
+            LaunchTemplate: 
+              LaunchTemplateName: IMDSv2
+              Version: 1
+            ImageId: !Ref LatestAmznAmiId
+            InstanceType: !Ref InstanceType
+            NetworkInterfaces: 
+              - AssociatePublicIpAddress: "false"
+                DeviceIndex: "0"
+                SubnetId: 
+                  Ref: DefaultSubnetID
+                GroupSet: 
+                  - Ref: EC2SecurityGroup
+                DeleteOnTermination: "true"
+            KeyName: !Ref KeyPairName
+            AvailabilityZone: !Sub "${AWS::Region}a"
+            Tenancy: "default"
+            EbsOptimized: false
+            SourceDestCheck: true
+            BlockDeviceMappings: 
+              - 
+                DeviceName: "/dev/xvda"
+                Ebs: 
+                    Encrypted: true
+                    VolumeSize: 8
+                    VolumeType: "gp2"
+                    DeleteOnTermination: true
+            UserData:
+              Fn::Base64: 
+                !Sub |
+                  #!/bin/bash
+                  mkdir -m 700 ~ssm-user/.ssh
+                  echo -e "#Qualys Authenticated Scan PublicKey With Mandatory Source (i.e from) Filter#\nfrom=\"10.95.224.0/20\" ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCkNqJmXhl7KzmnXHFUZa5IIDvBGX94HVSy+0OyqN2mvkbSfC+9rZOAn2aq419WOlddrz7YTDzb7rsWA6vnDD0rma0keYo9iWJfRaw89SMugYCutmbTpEhlFiYNWBzpaAfGFDpKvzMunH/WVJzHmL8/GjySDWRCg/jxcsgK0E67hJsem/m3oanT3LcruwFyQz5zk5sKc4c1aHhcxVLi8LQl0OKMrtBPUImzF4tzJJXNk0J1CrKBK4PrCM0GHGBl5sL/Ue01c36RkT/R9tEHDrUiUvLJhHokggqOoQzziAur680b1NldlMTksnSNqbDmo/z2SY/asmbUZtmkremmM4Qr ssm-user@qualys" > ~ssm-user/.ssh/authorized_keys
+                  chown -R ssm-user: ~ssm-user
+                   
+                  ##Update AMI Tags##
+                  ami_id=${LatestAmznAmiId}
+
+                  ami_golden=$(aws ec2 describe-images --region us-east-1 --filters "Name=tag:AMI-Type,Values=Golden" --query 'Images[*].[ImageId]' --output text | grep $ami_id)
+
+                  if [[ -n $ami_golden ]];then
+
+                    echo -e "\nThis Instance is launched using Golden Image AMI : $ami_id\n"
+
+                    . /etc/os-release
+                    NAME=$(echo $NAME)
+                    MAJOR_VERSION=$(echo $VERSION|grep -o ^[0-9])
+                    MAJOR_MINOR=$(echo $VERSION)
+                    FULL_VERSION=$(echo "$ID$MAJOR_MINOR")
+                    
+                    aws ec2 describe-tags --filters "Name=resource-id,Values=$ami_id" --output text
+                    aws ec2 create-tags --resources $ami_id --tags Key=OSMajorMinorVersion,Value=$FULL_VERSION
+                    aws ec2 create-tags --resources $ami_id --tags Key=Name,Value=GoldenImageTest-$ID$MAJOR
+                    aws ec2 describe-tags --filters "Name=resource-id,Values=$ami_id" --output text
+                    
+                  else
+                    echo -e "\nCannot Determine the AMI ID, Skipping Update Tags on AMI ...\n"
+                  fi
+                  
+                  ##Trigger Qualys PC SCAN##
+                  date && echo -e "\nRunning Qualys PC Scan\n" && /usr/local/qualys/cloud-agent/bin/cloudagentctl.sh action=demand type=pc
+
+            IamInstanceProfile: "AmazonEC2RoleforSSM"
+            Tags: 
+              - Key: "Name"
+                Value: !Ref AmznInstanceName
+            HibernationOptions: 
+                Configured: false
+            EnclaveOptions: 
+                Enabled: false
+
+    RHEL8EC2Instance:
+        Type: "AWS::EC2::Instance"
+        Condition: RHEL8InstanceReq
+        Properties:
+            LaunchTemplate: 
+              LaunchTemplateName: IMDSv2
+              Version: 1
+            ImageId: !Ref LatestRhel8AmiId
+            InstanceType: !Ref InstanceType
+            NetworkInterfaces: 
+              - AssociatePublicIpAddress: "false"
+                DeviceIndex: "0"
+                SubnetId: 
+                  Ref: DefaultSubnetID
+                GroupSet: 
+                  - Ref: EC2SecurityGroup
+                DeleteOnTermination: "true"
+            KeyName: !Ref KeyPairName
+            AvailabilityZone: !Sub "${AWS::Region}a"
+            Tenancy: "default"
+            EbsOptimized: false
+            SourceDestCheck: true
+            BlockDeviceMappings: 
+              - 
+                DeviceName: "/dev/xvda"
+                Ebs: 
+                    Encrypted: true
+                    VolumeSize: 10
+                    VolumeType: "gp2"
+                    DeleteOnTermination: true
+            UserData:
+              Fn::Base64: 
+                !Sub |
+                  #!/bin/bash
+                  mkdir -m 700 ~ssm-user/.ssh
+                  echo -e "#Qualys Authenticated Scan PublicKey With Mandatory Source (i.e from) Filter#\nfrom=\"10.95.224.0/20\" ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCkNqJmXhl7KzmnXHFUZa5IIDvBGX94HVSy+0OyqN2mvkbSfC+9rZOAn2aq419WOlddrz7YTDzb7rsWA6vnDD0rma0keYo9iWJfRaw89SMugYCutmbTpEhlFiYNWBzpaAfGFDpKvzMunH/WVJzHmL8/GjySDWRCg/jxcsgK0E67hJsem/m3oanT3LcruwFyQz5zk5sKc4c1aHhcxVLi8LQl0OKMrtBPUImzF4tzJJXNk0J1CrKBK4PrCM0GHGBl5sL/Ue01c36RkT/R9tEHDrUiUvLJhHokggqOoQzziAur680b1NldlMTksnSNqbDmo/z2SY/asmbUZtmkremmM4Qr ssm-user@qualys" > ~ssm-user/.ssh/authorized_keys
+                  chown -R ssm-user: ~ssm-user
+                   
+                  ##Update AMI Tags##
+                  ami_id=${LatestRhel8AmiId}
+
+                  ami_golden=$(aws ec2 describe-images --region us-east-1 --filters "Name=tag:AMI-Type,Values=Golden" --query 'Images[*].[ImageId]' --output text | grep $ami_id)
+
+                  if [[ -n $ami_golden ]];then
+
+                    echo -e "\nThis Instance is launched using Golden Image AMI : $ami_id\n"
+
+                    . /etc/os-release
+                    NAME=$(echo $NAME)
+                    MAJOR_VERSION=$(echo $VERSION|grep -o ^[0-9])
+                    MAJOR_MINOR=$(echo $VERSION)
+                    FULL_VERSION=$(echo "$ID$MAJOR_MINOR")
+
+                    aws ec2 describe-tags --filters "Name=resource-id,Values=$ami_id" --output text
+                    aws ec2 create-tags --resources $ami_id --tags Key=OSMajorMinorVersion,Value=$FULL_VERSION
+                    aws ec2 create-tags --resources $ami_id --tags Key=Name,Value=GoldenImageTest-$ID$MAJOR
+                    aws ec2 describe-tags --filters "Name=resource-id,Values=$ami_id" --output text
+
+                  else
+                    echo -e "\nCannot Determine the AMI ID, Skipping Update Tags on AMI ...\n"
+                  fi
+                  
+                  ##Trigger Qualys PC SCAN##
+                  date && echo -e "\nRunning Qualys PC Scan\n" && /usr/local/qualys/cloud-agent/bin/cloudagentctl.sh action=demand type=pc
+
+            IamInstanceProfile: "AmazonEC2RoleforSSM"
+            Tags: 
+              - Key: "Name"
+                Value: !Ref RHEL8InstanceName
+            HibernationOptions: 
+                Configured: false
+            EnclaveOptions: 
+                Enabled: false

@@ -13,11 +13,7 @@ Parameters:
   defaultInstancePolicyName:
     Description: Default InstancePolicyArn to be Attached to InstanceProfile.
     Type: String
-    Default: 'AmazonSSMManagedInstanceCore'
-  awsManagedPolicy:
-    Description: Whether Default InstancePolicy is AWS Managed ot Customer Managed.
-    Type: String
-    Default: "true"
+    Default: 'AmazonSSMManagedInstanceCore_And_ExtraConfigs'
 
 Resources:
   EC2ProfileLambdaFunctionRole:
@@ -53,7 +49,6 @@ Resources:
                 - AssociateIamInstanceProfile
                 - ReplaceIamInstanceProfileAssociation
                 - DisassociateIamInstanceProfile
-                - StartInstances
       State: !Ref eventState
       Targets:
         - Arn: !GetAtt 'EC2ProfileLambdaFunction.Arn'
@@ -87,13 +82,12 @@ Resources:
           import json
           import boto3
           import sys
-          import time
           from botocore.exceptions import ClientError
 
-          def find_rolename(event,ec2instancename):
+          def find_rolename(event):
               """Function to find IAM Role."""
-              rolename = ''
               log.info('eventName: %s' % event["detail"]["eventName"])
+              rolename = "false"
               if event["detail"]["eventName"] == "AssociateIamInstanceProfile":
                   rolename = event["detail"]["requestParameters"]["AssociateIamInstanceProfileRequest"]["IamInstanceProfile"]["Name"]
               if event["detail"]["eventName"] == "ReplaceIamInstanceProfileAssociation":
@@ -105,17 +99,6 @@ Resources:
                       if "name" in event["detail"]["requestParameters"]["iamInstanceProfile"]:
                           rolename = event["detail"]["requestParameters"]["iamInstanceProfile"]["name"]
               if event["detail"]["eventName"] == "DisassociateIamInstanceProfile":
-                  rolename = "false"
-              if event["detail"]["eventName"] == "StartInstances":
-                  client = boto3.client('ec2')    
-                  response = client.describe_instances(
-                      InstanceIds=[
-                          ec2instancename
-                      ]
-                  )
-                  if "IamInstanceProfile" in response['Reservations'][0]['Instances'][0]:
-                      rolename = response['Reservations'][0]['Instances'][0]['IamInstanceProfile']['Arn'].split('/')[1]
-              if not rolename:
                   rolename = "false"
               return rolename
 
@@ -129,8 +112,6 @@ Resources:
                   ec2instance = event["detail"]["responseElements"]["instancesSet"]["items"][0]["instanceId"]
               if event["detail"]["eventName"] == "DisassociateIamInstanceProfile":
                   ec2instance = event["detail"]["responseElements"]["DisassociateIamInstanceProfileResponse"]["iamInstanceProfileAssociation"]["instanceId"]
-              if event["detail"]["eventName"] == "StartInstances":
-                  ec2instance = event["detail"]["requestParameters"]["instancesSet"]["items"][0]["instanceId"]
               return ec2instance
 
           def setup_logging():
@@ -205,21 +186,16 @@ Resources:
               stsclient = boto3.client('sts')
               accountID = stsclient.get_caller_identity()['Account']
               region = os.environ.get('AWS_REGION')
-              awsManagedPolicy = os.environ.get('awsManagedPolicy')
               defaultInstanceProfileName = os.environ['defaultInstanceProfileName']
-              defaultInstancePolicyName = os.environ['defaultInstancePolicyName']
-              
-              if awsManagedPolicy == "true":
-                  defaultInstancePolicyArn = f'arn:aws:iam::aws:policy/{defaultInstancePolicyName}'
-              else:
-                  defaultInstancePolicyArn = f'arn:aws:iam::{accountID}:policy/{defaultInstancePolicyName}'
+              defaultInstancePolicyArn = os.environ['defaultInstancePolicyArn']
+              defaultInstancePolicyName = defaultInstancePolicyArn.split('/')[1]
 
               setup_logging()
               log.info('Lambda received event:')
               log.info(json.dumps(event))
               ec2instancename = find_ec2(event)
               try:
-                  instanceprofile = find_rolename(event,ec2instancename)
+                  instanceprofile = find_rolename(event)
                   if instanceprofile == "false":
                       log.info("No IAM InstanceProfile Attached to %s ..." % ec2instancename)
                       instanceprofile = ''
@@ -238,5 +214,4 @@ Resources:
         Variables:
           logging_level: INFO
           defaultInstanceProfileName: !Ref defaultInstanceProfileName
-          defaultInstancePolicyName: !Sub '${defaultInstancePolicyName}'
-          awsManagedPolicy: !Ref awsManagedPolicy
+          defaultInstancePolicyArn: !Sub 'arn:aws:iam::${AWS::AccountId}:policy/${defaultInstancePolicyName}'

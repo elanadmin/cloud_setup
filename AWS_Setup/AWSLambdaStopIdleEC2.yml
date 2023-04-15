@@ -38,7 +38,8 @@ Resources:
           "detail": {
             "state": [
               "running",
-              "terminated"
+              "terminated",
+              "stopped"
             ]
           }
         }'
@@ -102,7 +103,7 @@ Resources:
               cloudWatch.set_alarm_state(
                 AlarmName=f'CPU_ALARM_EC2STOP_{instance_id}',
                 StateValue=alarmstate,
-                StateReason='Resetting to' + ' ' + alarmstate
+                StateReason='Resetting Alarm to' + ' ' + alarmstate
               )
 
           def ec2_handler(event, context):
@@ -116,7 +117,7 @@ Resources:
               if instance_state == "terminated":
                   delete_cpu_alarm(instance_id, alarmname)
               if instance_state == "stopped":
-                  delete_cpu_alarm(instance_id, alarmname, resetalarmstate)
+                  reset_cpu_alarm(instance_id, alarmname, resetalarmstate)
       Environment:
         Variables:
           ALARM_TAG: Owner

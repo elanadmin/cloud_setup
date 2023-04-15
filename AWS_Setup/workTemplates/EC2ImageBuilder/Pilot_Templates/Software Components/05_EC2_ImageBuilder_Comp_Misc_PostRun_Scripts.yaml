@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Metadata:
+    Generator: "former2"
+Description: "EC2 ImageBuilder Component for Miscellanous PostRun Scripts"
+
+Parameters: 
+  s3downloadbucket:
+    Description: "Name of the S3 Bucket to download data from"
+    Type: String
+    Default: "ec2imagebuilder-eiger-infra"
+
+Resources:
+    ImageBuilderComponent:
+        Type: "AWS::ImageBuilder::Component"
+        Properties:
+            Name: "misc-postrun-scripts"
+            Description: "Run Miscellaneous PostRun Scripts."
+            Version: "1.0.0"
+            Platform: "Linux"
+            Tags:
+              Purpose: "GoldenImage"
+              Platform: "Linux"
+            Data: |
+              name: misc-postrun-scripts
+              description: Run Miscellaneous PostRun Scripts.
+              schemaVersion: 1.0
+
+              parameters:
+                - s3_download_bucket:
+                    type: string
+                    default: 'ec2imagebuilder-eiger-pilot'
+                    description: S3 Bucket to Download Data From.
+
+              phases:
+                - name: build
+                  steps:
+                    - name: Fail
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - echo 1
+                          
+                    - name: OperatingSystemRelease
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            FILE=/etc/os-release
+                            if [ -e $FILE ]; then
+                              . $FILE
+                              MAJOR_VERSION=$(echo $VERSION_ID | grep -o ^[0-9])
+                              echo "$ID${MAJOR_VERSION:+${MAJOR_VERSION}}"
+                            else
+                              echo "The file $FILE does not exist. Failing build."
+                              exit {{ build.Fail.outputs.stdout }}
+                            fi
+                  
+                    - name: OperatingSystemArchitecture
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            ARCH=$(uname -m)
+                            if [ `echo $ARCH | grep -Ev '^(aarch64|x86_64)'` ]; then
+                              echo "The '$ARCH' architecture is not supported. Failing build."
+                              exit {{ build.Fail.outputs.stdout }}
+                            fi
+                            echo $ARCH
+                            
+                    - name: Run_Post_Vulnerability_Fixes_And_Scripts
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            #!/bin/bash
+                            
+                            os_release={{ build.OperatingSystemRelease.outputs.stdout }}
+                            arch={{ build.OperatingSystemArchitecture.outputs.stdout }}
+
+                            cd $(pwd)/
+                            
+                            #Download Files to System, Example: motd Banner
+                            for path in $(aws s3 ls --recursive {{s3_download_bucket}}/Config/Files/|awk '{print $4}')
+                            do
+                              tpath=${path#*Config/Files}
+                              dpath=${tpath%/*}
+                              aws s3 sync s3://{{s3_download_bucket}}/Config/Files$dpath/ $dpath/
+                            done
+                            
+                            #Set Permissions/Ownerships on the downloaded files.
+                            aws s3 cp s3://{{s3_download_bucket}}/Config/Ownerships/ownerships /tmp/
+                            grep -v "^#" /tmp/ownerships | while read -r line
+                            do
+                              file=$(echo $line|awk -F ':' '{print $1}')
+                              perms=$(echo $line|awk -F ':' '{print $2}')
+                              user=$(echo $line|awk -F ':' '{print $3}')
+                              group=$(echo $line|awk -F ':' '{print $4}')
+
+                              if [[ -n "$perms" ]];then
+                                chmod $perms $file
+                              fi
+
+                              if [[ -n "$user" ]];then
+                                chown -R $user:$group $file
+                              fi
+
+                              ls -l $file
+                            done
+                            
+                            #Download Vuln_Fix Scripts
+                            for path in $(aws s3 ls --recursive {{s3_download_bucket}}/Scripts/misc_postrun_scripts|awk '{print $4}')
+                            do
+                              tpath=${path#*Scripts/misc_postrun_scripts}
+                              dpath=${tpath%/*}
+                              mkdir -p /var/tmp/misc_postrun_scripts
+                              aws s3 sync s3://{{s3_download_bucket}}/Scripts/misc_postrun_scripts$dpath/ /var/tmp/misc_postrun_scripts/
+                            done
+                            
+                            #Run Vuln_Fix Scripts
+                            if [[ -d /var/tmp/misc_postrun_scripts ]];then
+                              for file in $(find /var/tmp/misc_postrun_scripts -type f | grep -v post_validation_scripts)
+                              do
+                                echo -e "\nRunning $file ...\n"
+                                chmod 755 $file
+                                bash $file $os_release $arch
+                              done
+                            fi
+
+
+                    - name: Reboot_If_Needed
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            if [[ -f "/tmp/reboot_required" ]];then
+                              echo -e "\nReboot Required, Initiating Reboot.\n"
+                              rm /tmp/reboot_required
+                              exit 194
+                            else
+                              echo -e "\nReboot Not Required.\n"
+                            fi
+
+                - name: validate
+                  steps:
+                    - name: Validate_Post_Miscellaneous_Steps
+                      action: ExecuteBash
+                      inputs:
+                        commands:
+                          - |
+                            cd $(pwd)/
+                            if [[ -d /var/tmp/misc_postrun_scripts ]];then
+                              for file in $(find /var/tmp/misc_postrun_scripts -type f | grep post_validation_scripts )
+                              do
+                                echo -e "\nRunning $file ...\n"
+                                chmod 755 $file
+                                bash $file
+                              done
+                            fi

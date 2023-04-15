@@ -1,0 +1,714 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation template to create a scheduled multi-account and multi-Region patching operation using Amazon EventBridge, AWS Lambda, and AWS Systems Manager Automation.
+Parameters:
+  ExecutionRoleName:
+    Type: String
+    Default: AWS-SystemsManager-AutomationExecutionRole
+    Description: >-
+      The Automation execution role to be assumed in target accounts during multi-account and multi-Region Automation patching operations.
+  ExistingAutomationAdministrationRole:
+    Type: String
+    Description: >-
+      (Optional) The IAM role ARN of an existing Automation Administration role which has permissions to invoke multi-account and multi-Region Automation workflows.
+  RunPatchBaselineOperation:
+    Type: String
+    Default: Install
+    AllowedValues:
+      - Scan
+      - Install
+    Description: >-
+      (Required) The update or configuration to perform on the instance. The Scan operation checks if patches specified in the patch baseline are installed on the instance. The Install operation installs patches missing from the baseline.
+  RunPatchBaselineRebootOption:
+    Type: String
+    Default: RebootIfNeeded
+    AllowedValues:
+      - RebootIfNeeded
+      - NoReboot
+    Description: >-
+      (Optional) Reboot behavior after a patch Install operation. If you choose NoReboot and patches are installed, the instance is marked as non-compliant until a subsequent reboot and scan.
+  RunPatchBaselineInstallOverrideList:
+    Type: String
+    Default: ''
+    AllowedPattern: '(^$)|^https://.+$|^s3://([^/]+)/(.*?([^/]+))$'
+    Description: >-
+      (Optional) An https URL or an Amazon S3 path-style URL to the list of patches to be installed. This patch installation list overrides the patches specified by the default patch baseline.
+  AutomationAssumeRole:
+    Type: String
+    Description: >-
+      Automation AssumeRole
+    Default: "arn:aws:iam::169523143400:role/AWS-SystemsManager-AutomationAdministrationRole"
+  InstanceProfile:
+    Type: String
+    Default: "AmazonEC2RoleforSSM"
+    Description: >-
+      EC2 Instance Profile to be used for Launch.
+
+Conditions:
+  CreateAutomationAdministrationRoleCondition:
+    Fn::Equals:
+    - Ref: ExistingAutomationAdministrationRole
+    - ''
+
+Resources:
+  AutomationAdministrationServiceRole:
+    Type: AWS::IAM::Role
+    Condition: CreateAutomationAdministrationRoleCondition
+    Properties:
+      RoleName: AWS-SystemsManager-AutomationAdministrationRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 
+            - ssm.amazonaws.com
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AmazonSSMAutomationRole
+      Path: "/"
+      Policies:
+      - PolicyName: AssumeRole-AWSSystemsManagerAutomationExecutionRole
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - sts:AssumeRole
+            Resource:
+              Fn::Sub: arn:${AWS::Partition}:iam::*:role/AWS-SystemsManager-AutomationExecutionRole
+            Action:
+            - sts:AssumeRole
+          - Effect: Allow
+            Action:
+            - iam:PassRole
+            Resource:
+            - !Sub "arn:aws:iam::${AWS::AccountId}:instance-profile/${InstanceProfile}"
+            - !Sub "arn:aws:iam::${AWS::AccountId}:role/${InstanceProfile}"
+          - Effect: Allow
+            Action:
+            - organizations:ListAccountsForParent
+            Resource:
+            - "*"
+
+  AutomationDocumentMamrRunPatchBaseline:
+    Type: AWS::SSM::Document
+    Properties: 
+      DocumentType: Automation
+      DocumentFormat: YAML
+      Name: Eiger-AMIBaselineSecurityPatching
+      TargetType: /AWS::EC2::Instance
+      Content:
+        description: >-
+          **Description**
+
+          "Run Security Patching for AMI using 'AWS-RunPatchBaseline' Command/Automation Document."
+        schemaVersion: '0.3'
+        outputs:
+          - createImage.OutputPayload
+        assumeRole: '{{ AutomationAssumeRole }}'
+        parameters:
+          AutomationAssumeRole:
+            type: String
+            default: !Ref AutomationAssumeRole
+            description: Default Automation AssumeRole.
+          s3downloadbucket:
+            type: String
+            default: 'ec2imagebuilder-eiger-infra'
+            description: S3 Download Bucket.
+          SourceAMI:
+            type: String
+            description: The ID of the AMI you want to patch.
+          NewAMI:
+            type: String
+            description: The name of of newly patched AMI.
+            default: 'PatchedAMI-{{global:DATE_TIME}}'
+          InstanceProfile:
+            type: String
+            description: The name of the IAM instance profile you want the source instance to use.
+            default: AmazonEC2RoleforSSM
+          SnapshotId:
+            default: ''
+            description: '(Optional) The snapshot ID to use to retrieve a patch baseline snapshot.'
+            type: String
+          RebootOption:
+            default: !Ref RunPatchBaselineRebootOption
+            description: '(Optional) Reboot behavior after a patch Install operation. If you choose NoReboot and patches are installed, the instance is marked as non-compliant  until a subsequent reboot and scan.'
+            type: String
+            allowedValues:
+            - "RebootIfNeeded"
+            - "NoReboot"
+          InstallOverrideList:
+            default: ''
+            description: '(Optional) An https URL or an Amazon S3 path-style URL to the list of patches to be installed. This patch installation list overrides the patches specified by the default patch baseline.'
+            type: String
+          Operation:
+            default: !Ref RunPatchBaselineOperation
+            description: '(Required) The update or configuration to perform on the instance. The system checks if patches specified in the patch baseline are installed on the instance. The install operation installs patches missing from the baseline.'
+            type: String
+            allowedValues:
+            - "Scan"
+            - "Install"
+          RunOnlySanityChecks:
+            type: String
+            default: "false"
+            description: Run Only Sanity Checks, Skipping Further Steps.
+            allowedValues:
+            - "true"
+            - "false"
+          RunSecurityAgentsInstall:
+            type: String
+            default: "false"
+            description: Run Security Agents Install.
+            allowedValues:
+            - "true"
+            - "false"          
+          CleanUpWorkDir:
+            type: String
+            default: "true"
+            description: CleanUp WorkDir.
+            allowedValues:
+            - "true"
+            - "false"
+          MaxErrors:
+            type: String
+            description: Max Run Errors.
+            default: "1"
+          MaxConcurrency:
+            type: String
+            description: Max Run Concurrency.
+            default: "1"
+          NewAMI:
+            type: String
+            description: The name of newly patched AMI.
+            default: PatchedAMI-{{global:DATE_TIME}}
+          SecurityGroupName:
+            type: String
+            description: The name of SecurityGroup Attached to EC2 Instance.
+            default: InfraAMIPatchTestSG
+          RemoteAccessCidr:
+            type: String
+            description: RemoteAccessCidr for SecurityGroup Attached to EC2 Instance.
+            default: "10.0.0.0/8"
+          QualysActivationId:
+            type: String
+            default: '96f4172e-2d4e-462d-92a7-4e96a80f2c34'
+            description: qualys-cloud-agent ActivationId.    
+          QualysCustomerId:
+            type: String
+            default: 'e76a2f4e-d6af-e59c-82c6-a64e3ad45856'
+            description: qualys-cloud-agent CustomerId.
+          s3downloadbucket:
+            type: String
+            default: 'ec2imagebuilder-eiger-infra'
+            description: S3 Download Bucket.
+        mainSteps:
+          - name: checkImageId
+            action: aws:executeAwsApi
+            inputs:
+              Service: ec2
+              Api: DescribeImages
+              Filters:  
+              - Name: "image-id"
+                Values: 
+                - "{{ SourceAMI }}"
+            outputs:
+            - Name: SourceAMIName
+              Selector: "$.Images[0].Name"
+              Type: "String"
+
+          - name: getdefaultVPC
+            action: aws:executeAwsApi
+            inputs:
+              Service: ssm
+              Api: get_parameter  
+              Name: "defaultVPCId"
+            outputs:
+            - Name: defaultVPCId
+              Selector: "$.Parameter.Value"
+              Type: "String"
+
+          - name: getdefaultSubnet
+            action: aws:executeAwsApi
+            inputs:
+              Service: ssm
+              Api: get_parameter  
+              Name: "defaultSubnetId"
+            outputs:
+            - Name: defaultSubnetId
+              Selector: "$.Parameter.Value"
+              Type: "String"
+
+          - name: DescribeSecurityGroup
+            action: 'aws:executeAwsApi'
+            inputs:
+              Service: ec2
+              Api: DescribeSecurityGroups
+              Filters:
+                - Name: group-name
+                  Values:
+                    - '{{ SecurityGroupName }}'
+                - Name: vpc-id
+                  Values:
+                    - '{{getdefaultVPC.defaultVPCId}}'
+            outputs:
+              - Name: SecurityGroup
+                Selector: '$.SecurityGroups[0].GroupName'
+                Type: String
+              - Name: SecurityGroupId
+                Selector: '$.SecurityGroups[0].GroupId'
+                Type: String
+
+          - name: CheckSecurityGroupStatus
+            action: 'aws:branch'
+            inputs:
+              Choices:
+                - NextStep: verifySecurityGroup
+                  Variable: '{{ DescribeSecurityGroup.SecurityGroup }}'
+                  StringEquals: '{{ SecurityGroupName }}'
+              Default: CreateSecurityGroup
+
+          - name: CreateSecurityGroup
+            action: 'aws:executeAwsApi'
+            inputs:
+              Service: ec2
+              Api: CreateSecurityGroup
+              GroupName: '{{ SecurityGroupName }}'
+              Description: 'AWS created security group for Patched AMI EC2 Instance'
+              VpcId: '{{getdefaultVPC.defaultVPCId}}'
+            outputs:
+              - Name: SecurityGroupId
+                Selector: $.GroupId
+                Type: String
+
+          - name: AuthorizeSecurityGroupSSH
+            action: 'aws:executeAwsApi'
+            inputs:
+              Service: ec2
+              Api: AuthorizeSecurityGroupIngress
+              CidrIp: '{{ RemoteAccessCidr }}'
+              FromPort: 22
+              ToPort: 22
+              GroupId: '{{ CreateSecurityGroup.SecurityGroupId }}'
+              IpProtocol: tcp
+          
+          - name: AuthorizeSecurityGroupHTTPS
+            action: 'aws:executeAwsApi'
+            inputs:
+              Service: ec2
+              Api: AuthorizeSecurityGroupIngress
+              CidrIp: '{{ RemoteAccessCidr }}'
+              FromPort: 443
+              ToPort: 443
+              GroupId: '{{ CreateSecurityGroup.SecurityGroupId }}'
+              IpProtocol: tcp
+
+          - name: AuthorizeSecurityGroupICMP
+            action: 'aws:executeAwsApi'
+            inputs:
+              Service: ec2
+              Api: AuthorizeSecurityGroupIngress
+              CidrIp: '{{ RemoteAccessCidr }}'
+              FromPort: -1
+              ToPort: -1
+              GroupId: '{{ CreateSecurityGroup.SecurityGroupId }}'
+              IpProtocol: icmp
+            
+          - name: verifySecurityGroup
+            action: 'aws:executeAwsApi'
+            inputs:
+              Service: ec2
+              Api: DescribeSecurityGroups
+              Filters:
+                - Name: group-name
+                  Values:
+                    - '{{ SecurityGroupName }}'
+                - Name: vpc-id
+                  Values:
+                    - '{{getdefaultVPC.defaultVPCId}}'
+            outputs:
+              - Name: verifySecurityGroup
+                Selector: '$.SecurityGroups[0].GroupName'
+                Type: String
+              - Name: verifySecurityGroupId
+                Selector: '$.SecurityGroups[0].GroupId'
+                Type: String
+
+          - name: startInstances
+            action: 'aws:runInstances'
+            timeoutSeconds: 1200
+            maxAttempts: 1
+            onFailure: Abort
+            inputs:
+              ImageId: '{{ SourceAMI }}'
+              InstanceType: m5.large
+              MinInstanceCount: 1
+              MaxInstanceCount: 1
+              NetworkInterfaces: [
+                {
+                  "DeviceIndex": 0,
+                  "AssociatePublicIpAddress": false,
+                  "SubnetId": '{{ getdefaultSubnet.defaultSubnetId }}',
+                  "Groups": ['{{ verifySecurityGroup.verifySecurityGroupId }}'],
+                  "DeleteOnTermination": true
+                }
+              ]
+              IamInstanceProfileName: '{{ InstanceProfile }}'
+              TagSpecifications:
+              - ResourceType: instance
+                Tags:
+                  - Key: Name
+                    Value: AMIPatching-{{ SourceAMI }}
+                  - Key: Owner
+                    Value: 'Infrastructure'
+                  - Key: Environment
+                    Value: 'Sandbox'
+                  - Key: Backup
+                    Value: 'No'
+                  - Key: Patching
+                    Value: 'No'
+                  - Key: BuiltFromGI
+                    Value: 'No'
+                  - Key: Application
+                    Value: 'AMIPatchTest'
+
+          - name: verifyInstanceManaged
+            action: 'aws:waitForAwsResourceProperty'
+            timeoutSeconds: 600
+            inputs:
+              Service: ssm
+              Api: DescribeInstanceInformation
+              InstanceInformationFilterList:
+                - key: InstanceIds
+                  valueSet:
+                    - '{{ startInstances.InstanceIds }}'
+              PropertySelector: '$.InstanceInformationList[0].PingStatus'
+              DesiredValues:
+                - Online
+            onFailure: 'step:terminateInstance'
+
+          - name: Source_Env_Settings
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunRemoteScript
+              Parameters:
+                "sourceType": "S3"
+                "sourceInfo": '{"path":"https://{{s3downloadbucket}}.s3.amazonaws.com/Scripts/post_migration_scripts/env_settings.sh"}'
+                "commandLine": "bash env_settings.sh"
+                "workingDirectory": "/var/tmp"
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-BaselineSecurityPatching
+                CloudWatchOutputEnabled: true
+
+          - name: Sanity_Checks
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunRemoteScript
+              Parameters:
+                "sourceType": "S3"
+                "sourceInfo": '{"path":"https://{{s3downloadbucket}}.s3.amazonaws.com/Scripts/post_migration_scripts/sanity_checks.sh"}'
+                "commandLine": "bash sanity_checks.sh"
+                "workingDirectory": "/var/tmp"
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-BaselineSecurityPatching
+                CloudWatchOutputEnabled: true
+            onFailure: Continue
+
+          - name: PrePatch_Security_Report
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunRemoteScript
+              Parameters:
+                "sourceType": "S3"
+                "sourceInfo": '{"path":"https://{{s3downloadbucket}}.s3.amazonaws.com/Scripts/post_migration_scripts/security_checks.sh"}'
+                "commandLine": "bash security_checks.sh"
+                "workingDirectory": "/var/tmp"
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-BaselineSecurityPatching
+                CloudWatchOutputEnabled: true
+            onFailure: Continue
+
+          - name: Question_RunOnlySanityChecks
+            action: aws:branch
+            inputs:
+              Choices:
+              - NextStep: CleanUp_WorkDir
+                Variable: "{{RunOnlySanityChecks}}"
+                Contains: "true"
+              Default: Question_RunSecurityAgentsInstall
+
+          - name: Question_RunSecurityAgentsInstall
+            action: aws:branch
+            inputs:
+              Choices:
+              - NextStep: Install_PreReqs
+                Variable: "{{RunSecurityAgentsInstall}}"
+                Contains: "true"
+              Default: Pre_Patching_Commands
+
+          - name: Install_PreReqs
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunRemoteScript
+              Parameters:
+                "sourceType": "S3"
+                "sourceInfo": '{"path":"https://{{s3downloadbucket}}.s3.amazonaws.com/Scripts/post_migration_scripts/install_prereqs.sh"}'
+                "commandLine": "bash install_prereqs.sh"
+                "workingDirectory": "/var/tmp/PostMigrationAutomation"
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-PostMigrationAutomation
+                CloudWatchOutputEnabled: true
+            onFailure: Continue
+
+          - name: OS_Release
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunShellScript
+              Parameters:
+                commands:
+                  - |
+                    #!/bin/bash
+                    FILE=/etc/os-release
+                    if [ -e $FILE ]; then
+                      . $FILE
+                      MAJOR_VERSION=$(echo $VERSION_ID | grep -Eo ^[0-9]+)
+                      echo "$ID${MAJOR_VERSION:+${MAJOR_VERSION}}" | tee /var/tmp/os_release
+                    else
+                      echo "The file $FILE does not exist. Failing build."
+                      exit 1
+                    fi
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-PostMigrationAutomation
+                CloudWatchOutputEnabled: true
+
+          - name: Find_Arch
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunShellScript
+              Parameters:
+                commands:
+                  - |
+                    #!/bin/bash
+                    ARCH=$(uname -m)
+                    if [ `echo $ARCH | grep -Ev '^(aarch64|x86_64)'` ]; then
+                      echo "The '$ARCH' architecture is not supported. Failing build."
+                      exit 1
+                    fi
+                    echo $ARCH | tee /var/tmp/arch
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-PostMigrationAutomation
+                CloudWatchOutputEnabled: true
+              
+          - name: Install_CloudWatch_Agent
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunRemoteScript
+              Parameters:
+                "sourceType": "S3"
+                "sourceInfo": '{"path":"https://{{s3downloadbucket}}.s3.amazonaws.com/Scripts/post_migration_scripts/install_cwagent.sh"}'
+                "commandLine": "bash install_cwagent.sh"
+                "workingDirectory": "/var/tmp/PostMigrationAutomation"
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-PostMigrationAutomation
+                CloudWatchOutputEnabled: true
+            onFailure: Continue
+
+          - name: Install_Qualys_Agent
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunRemoteScript
+              Parameters:
+                "sourceType": "S3"
+                "sourceInfo": '{"path":"https://{{s3downloadbucket}}.s3.amazonaws.com/Scripts/post_migration_scripts/install_qualys_agent.sh"}'
+                "commandLine": "bash install_qualys_agent.sh {{s3downloadbucket}} {{QualysActivationId}} {{QualysCustomerId}}"
+                "workingDirectory": "/var/tmp/PostMigrationAutomation"
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-PostMigrationAutomation
+                CloudWatchOutputEnabled: true
+            onFailure: Continue
+
+          - name: Install_CBSensor_Agent
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunRemoteScript
+              Parameters:
+                "sourceType": "S3"
+                "sourceInfo": '{"path":"https://{{s3downloadbucket}}.s3.amazonaws.com/Scripts/post_migration_scripts/install_cbsensor_agent.sh"}'
+                "commandLine": "bash install_cbsensor_agent.sh {{s3downloadbucket}}"
+                "workingDirectory": "/var/tmp/PostMigrationAutomation"
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-PostMigrationAutomation
+                CloudWatchOutputEnabled: true
+            onFailure: Continue
+
+          - name: Install_Defender_Agent
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunRemoteScript
+              Parameters:
+                "sourceType": "S3"
+                "sourceInfo": '{"path":"https://{{s3downloadbucket}}.s3.amazonaws.com/Scripts/post_migration_scripts/install_defender_agent.sh"}'
+                "commandLine": "bash install_defender_agent.sh {{s3downloadbucket}}"
+                "workingDirectory": "/var/tmp/PostMigrationAutomation"
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-PostMigrationAutomation
+                CloudWatchOutputEnabled: true
+            onFailure: Continue
+
+          - name: Pre_Patching_Commands
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunRemoteScript
+              Parameters:
+                "sourceType": "S3"
+                "sourceInfo": '{"path":"https://{{s3downloadbucket}}.s3.amazonaws.com/Scripts/post_migration_scripts/pre_patching_cmds.sh"}'
+                "commandLine": "bash pre_patching_cmds.sh"
+                "workingDirectory": "/var/tmp/BaselineSecurityPatching"
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-BaselineSecurityPatching
+                CloudWatchOutputEnabled: true
+
+          - name: RunSecurityPatching
+            description: "This runs the AWS Command/Automation document 'AWS-RunPatchBaseline' on the specified ResourceGroup."
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunPatchBaseline
+              MaxErrors: '{{MaxErrors}}'
+              Parameters:
+                SnapshotId: '{{ SnapshotId }}'
+                RebootOption: '{{ RebootOption }}'
+                InstallOverrideList: '{{ InstallOverrideList }}'
+                Operation: '{{ Operation }}'
+              MaxConcurrency: '{{ MaxConcurrency }}'
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-BaselineSecurityPatching
+                CloudWatchOutputEnabled: true
+            timeoutSeconds: 7200
+            onFailure: Abort
+
+          - name: PostPatch_Security_Report
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunRemoteScript
+              Parameters:
+                "sourceType": "S3"
+                "sourceInfo": '{"path":"https://{{s3downloadbucket}}.s3.amazonaws.com/Scripts/post_migration_scripts/security_checks.sh"}'
+                "commandLine": "bash security_checks.sh /var/tmp/security_patches.out"
+                "workingDirectory": "/var/tmp"
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-BaselineSecurityPatching
+                CloudWatchOutputEnabled: true
+            onFailure: Continue
+
+          - name: Misc_Postrun_Scripts
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunRemoteScript
+              Parameters:
+                "sourceType": "S3"
+                "sourceInfo": '{"path":"https://{{s3downloadbucket}}.s3.amazonaws.com/Scripts/post_migration_scripts/misc_postrun_scripts.sh"}'
+                "commandLine": "bash misc_postrun_scripts.sh {{ s3downloadbucket }} {{ RebootOption }}"
+                "workingDirectory": "/var/tmp/BaselineSecurityPatching"
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-BaselineSecurityPatching
+                CloudWatchOutputEnabled: true
+            onFailure: Continue
+
+          - name: Post_Verify_Scripts
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunRemoteScript
+              Parameters:
+                "sourceType": "S3"
+                "sourceInfo": '{"path":"https://{{s3downloadbucket}}.s3.amazonaws.com/Scripts/post_migration_scripts/post_verify.sh"}'
+                "commandLine": "bash post_verify.sh"
+                "workingDirectory": "/var/tmp"
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-BaselineSecurityPatching
+                CloudWatchOutputEnabled: true
+            onFailure: Continue
+
+          - name: CleanUp_WorkDir
+            action: 'aws:runCommand'
+            inputs:
+              DocumentName: AWS-RunRemoteScript
+              Parameters:
+                "sourceType": "S3"
+                "sourceInfo": '{"path":"https://{{s3downloadbucket}}.s3.amazonaws.com/Scripts/post_migration_scripts/cleanup_workdir.sh"}'
+                "commandLine": "bash cleanup_workdir.sh {{CleanUpWorkDir}}"
+                "workingDirectory": "/var/tmp"
+              InstanceIds:
+                  - "{{ startInstances.InstanceIds }}"
+              CloudWatchOutputConfig:
+                CloudWatchLogGroupName: /aws/ssm/Eiger-BaselineSecurityPatching
+                CloudWatchOutputEnabled: true
+
+          - name: createImage
+            action: 'aws:createImage'
+            maxAttempts: 10
+            inputs:
+              InstanceId: '{{ startInstances.InstanceIds }}'
+              ImageName: '{{ NewAMI }}'
+              NoReboot: false
+              ImageDescription: Patched AMI created by Automation
+
+          - name: createTags
+            action: aws:createTags
+            maxAttempts: 3
+            onFailure: Abort
+            inputs:
+              ResourceType: EC2
+              ResourceIds:
+              - '{{createImage.ImageId}}'
+              Tags:
+              - Key: SourceAMI
+                Value: '{{SourceAMI}}'
+              - Key: SourceAMIName
+                Value: '{{checkImageId.SourceAMIName}}'
+              - Key: Name
+                Value: PatchedAMI-{{SourceAMI}}-{{global:DATE_TIME}}
+          
+          - name: sleep
+            action: aws:sleep
+            inputs:
+              Duration: PT30M
+
+          - name: terminateInstance
+            action: 'aws:changeInstanceState'
+            maxAttempts: 1
+            onFailure: Continue
+            inputs:
+              InstanceIds:
+                - '{{ startInstances.InstanceIds }}'
+              DesiredState: terminated

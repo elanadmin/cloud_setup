@@ -1,0 +1,163 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  This Template Creates the Backup Audit Manager Framework using AWS Backup.
+  It should be deployed in Management account.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: AWS Backup Audit Manager Framework Configuration
+        Parameters:
+          - pBackupAuditManagerFramework
+          - pBackupAuditManagerReportPlan
+          - pReportsBucket
+          - pOUs
+          - pRegions
+          - pAccounts
+    ParameterLabels:
+      pBackupAuditManagerFramework:
+        default: Enter an Backup Audit Manager Framework Name
+      pBackupAuditManagerReportPlan:
+        default: Enter an Backup Audit Manager Report Plan Name
+      pReportsBucket:
+        default: Enter s3 Bucket Name to Store Reports
+      pOUs:
+        default: Enter AWS Organization OUs
+      pRegions:
+        default: Enter AWS Regions to Cover
+      pAccounts:
+        default: Enter AWS Accounts to Cover
+
+Parameters:
+  pBackupAuditManagerFramework:
+    Type: String
+    Description: Enter an Backup Audit Manager Framework Name.
+    Default: Infrastructure_AWS_Backup_Compliance
+  pBackupAuditManagerReportPlan:
+    Type: String
+    Description: Enter an Backup Audit Manager Report Plan Name.
+    Default: ec2_backup_compliance_report
+  pReportsBucket:
+    Type: String
+    Description: Enter s3 Bucket Name to Store Reports
+    Default: eiger-backup-reports
+  pOUs:
+    Type: CommaDelimitedList
+    Description: Enter AWS Organization OUs.
+    Default: "ou-o8tt-7cu9j0xy,ou-o8tt-ph9mxujn,ou-o8tt-rn48gyv3,ou-o8tt-nzj0ajq9,ou-o8tt-14mr5ipp"
+  pRegions:
+    Type: CommaDelimitedList
+    Description: Enter AWS Regions to Cover.
+    Default: "us-east-1"
+
+Resources:
+    ReportsS3Bucket:
+        Type: 'AWS::S3::Bucket'
+        Properties:
+          BucketName: !Ref pReportsBucket
+
+    ListBucketPolicy:
+        Type: AWS::S3::BucketPolicy
+        Properties:
+          Bucket: !Ref ReportsS3Bucket
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - 's3:PutObject'
+                Effect: Allow
+                Resource: !Sub arn:aws:s3:::${pReportsBucket}/*
+                Principal:
+                  AWS:
+                    - !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/reports.backup.amazonaws.com/AWSServiceRoleForBackupReports
+        DependsOn: ReportsS3Bucket
+          
+    BackupFramework:
+        Type: "AWS::Backup::Framework"
+        Properties:
+            FrameworkName: "Infrastructure_AWS_Backup_Compliance"
+            FrameworkDescription: "Infrastructure_AWS_Backup_Compliance"
+            FrameworkControls: 
+              - 
+                ControlName: "BACKUP_RECOVERY_POINT_MINIMUM_RETENTION_CHECK"
+                ControlInputParameters: 
+                  - 
+                    ParameterName: "requiredRetentionDays"
+                    ParameterValue: "1"
+                ControlScope: {}
+              - 
+                ControlName: "BACKUP_RECOVERY_POINT_MANUAL_DELETION_DISABLED"
+                ControlScope:
+                    Tags: 
+                      - Key: "Owner"
+                        Value: "Infrastructure"
+              - 
+                ControlName: "BACKUP_LAST_RECOVERY_POINT_CREATED"
+                ControlInputParameters: 
+                  - 
+                    ParameterName: "recoveryPointAgeValue"
+                    ParameterValue: "1"
+                  - 
+                    ParameterName: "recoveryPointAgeUnit"
+                    ParameterValue: "days"
+                ControlScope: 
+                    ComplianceResourceTypes: 
+                      - "EC2"
+                    Tags: 
+                      - Key: "Backup"
+                        Value: "Yes"
+              - 
+                ControlName: "BACKUP_RESOURCES_PROTECTED_BY_CROSS_ACCOUNT"
+                ControlInputParameters: 
+                  - 
+                    ParameterName: "crossAccountList"
+                    ParameterValue: "169523143400"
+                ControlScope: 
+                    ComplianceResourceTypes: 
+                      - "EC2"
+                    Tags: 
+                      - Key: "Backup"
+                        Value: "Yes"
+              - 
+                ControlName: "BACKUP_RECOVERY_POINT_ENCRYPTED"
+                ControlScope: {}
+              - 
+                ControlName: "BACKUP_PLAN_MIN_FREQUENCY_AND_MIN_RETENTION_CHECK"
+                ControlInputParameters: 
+                  - 
+                    ParameterName: "requiredFrequencyUnit"
+                    ParameterValue: "days"
+                  - 
+                    ParameterName: "requiredRetentionDays"
+                    ParameterValue: "1"
+                  - 
+                    ParameterName: "requiredFrequencyValue"
+                    ParameterValue: "1"
+                ControlScope: {}
+              - 
+                ControlName: "BACKUP_RESOURCES_PROTECTED_BY_BACKUP_PLAN"
+                ControlScope: 
+                    ComplianceResourceTypes: 
+                      - "EC2"
+                    Tags: 
+                      - Key: "Backup"
+                        Value: "Yes"
+
+    BackupReportPlan:
+        Type: "AWS::Backup::ReportPlan"
+        Properties:
+            ReportPlanName: "ec2_backup_job_report"
+            ReportPlanDescription: "EC2 Backup Job Report"
+            ReportDeliveryChannel: 
+                S3BucketName: "eiger-backup-reports"
+                S3KeyPrefix: "Reports"
+                Formats: 
+                  - "CSV"
+            ReportSetting:
+                ReportTemplate: "BACKUP_JOB_REPORT"
+                Regions: !Ref pRegions
+                OrganizationUnits: !Ref pOUs
+        DependsOn: 
+          - ReportsS3Bucket
+          - BackupFramework

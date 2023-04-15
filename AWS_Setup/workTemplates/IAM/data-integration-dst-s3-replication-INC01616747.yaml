@@ -1,0 +1,70 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "AWS CloudFormation template for S3 Replication Bucket Policy in Destination Data Integration Dev Account",
+    "Parameters": {
+        "S3SrcAccountNumber": {
+            "Description": "S3 Replication Source Bucket Account Number",
+            "Type": "String",
+            "Default": "558420267243"
+        },
+        "S3ReplicationDstBucket": {
+            "Description": "S3 Replication Destination Bucket",
+            "Type": "String",
+            "Default": "unso-s3-dev-di-replicationtest"
+        },
+        "S3ReplicationSrcRole": {
+            "Description": "IAM RoleName for S3 Replication Role with Customer Managed Policies",
+            "Type": "String",
+            "Default": "S3-Replication-Batch-Ops-Role"
+        }
+    },
+    "Resources": {
+        "DstBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "S3ReplicationDstBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Id": "S3ReplicationBucketPolicy",
+                    "Statement": [
+                        {
+                            "Sid": "Set permissions for objects",
+                            "Effect": "Allow",
+                            "Principal": {
+                                  "AWS": { "Fn::Sub": "arn:aws:iam::${S3SrcAccountNumber}:role/${S3ReplicationSrcRole}" }
+                            },
+                            "Action": [
+                            "s3:ReplicateObject",
+                            "s3:ReplicateDelete"
+                            ],
+                            "Resource": [ 
+                                {
+                                  "Fn::Sub": "arn:aws:s3:::${S3ReplicationDstBucket}/*"
+                                }
+                            ]
+                        },
+                        {
+                            "Sid": "Set permissions on bucket",
+                            "Effect": "Allow",
+                            "Principal": {
+                                  "AWS": { "Fn::Sub": "arn:aws:iam::${S3SrcAccountNumber}:role/${S3ReplicationSrcRole}" }
+                            },
+                            "Action": [
+                            "s3:List*",
+                            "s3:GetBucketVersioning",
+                            "s3:PutBucketVersioning"
+                            ],
+                            "Resource": [
+                                {
+                                  "Fn::Sub": "arn:aws:s3:::${S3ReplicationDstBucket}"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}

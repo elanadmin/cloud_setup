@@ -1,0 +1,87 @@
+{
+  "objects": [
+    {
+      "output": {
+        "ref": "S3BackupLocation"
+      },
+      "input": {
+        "ref": "DDBSourceTable"
+      },
+      "maximumRetries": "2",
+      "name": "TableBackupActivity",
+      "step": "s3://dynamodb-dpl-#{myDDBRegion}/emr-ddb-storage-handler/4.11.0/emr-dynamodb-tools-4.11.0-SNAPSHOT-jar-with-dependencies.jar,org.apache.hadoop.dynamodb.tools.DynamoDBExport,#{output.directoryPath},#{input.tableName},#{input.readThroughputPercent}",
+      "id": "TableBackupActivity",
+      "runsOn": {
+        "ref": "EmrClusterForBackup"
+      },
+      "type": "EmrActivity",
+      "resizeClusterBeforeRunning": "true"
+    },
+    {
+      "enableDebugging": "true",
+      "name": "EmrClusterForBackup",
+      "coreInstanceCount": "1",
+      "coreInstanceType": "m3.xlarge",
+      "releaseLabel": "emr-5.23.0",
+      "masterInstanceType": "m3.xlarge",
+      "id": "EmrClusterForBackup",
+      "region": "#{myDDBRegion}",
+      "type": "EmrCluster",
+      "terminateAfter": "1 Day"
+    },
+    {
+      "readThroughputPercent": "#{myDDBReadThroughputRatio}",
+      "name": "DDBSourceTable",
+      "id": "DDBSourceTable",
+      "type": "DynamoDBDataNode",
+      "tableName": "#{myDDBTableName}"
+    },
+    {
+      "directoryPath": "#{myOutputS3Loc}/#{format(@scheduledStartTime, 'YYYY-MM-dd-HH-mm-ss')}",
+      "name": "S3BackupLocation",
+      "id": "S3BackupLocation",
+      "type": "S3DataNode"
+    },
+    {
+      "failureAndRerunMode": "CASCADE",
+      "resourceRole": "DataPipelineDefaultResourceRole",
+      "role": "DataPipelineDefaultRole",
+      "pipelineLogUri": "s3://adp-dynamodb-export-s3-logs/",
+      "scheduleType": "ONDEMAND",
+      "name": "Default",
+      "id": "Default"
+    }
+  ],
+  "parameters": [
+    {
+      "description": "Output S3 folder",
+      "id": "myOutputS3Loc",
+      "type": "AWS::S3::ObjectKey"
+    },
+    {
+      "description": "Source DynamoDB table name",
+      "id": "myDDBTableName",
+      "type": "String"
+    },
+    {
+      "default": "0.25",
+      "watermark": "Enter value between 0.1-1.0",
+      "description": "DynamoDB read throughput ratio",
+      "id": "myDDBReadThroughputRatio",
+      "type": "Double"
+    },
+    {
+      "default": "us-east-1",
+      "watermark": "us-east-1",
+      "description": "Region of the DynamoDB table",
+      "id": "myDDBRegion",
+      "type": "String"
+    }
+  ],
+  "values": {
+    "myDDBRegion": "us-east-1",
+    "myDDBTableName": "edw_filesystem_register",
+    "myDDBReadThroughputRatio": "1.0",
+    "myOutputS3Loc": "s3://dynamodb-export-data-unr-prod/dynamodb/"
+  }
+}

@@ -1,0 +1,562 @@
+Description:  This template deploys a VPC, with nine private subnets and four public subnets.
+
+Metadata:
+  Template:
+    Version: "1.0"
+
+Parameters:
+  VPCName:
+    Description: Name of the VPC. 
+    Type: String
+    Default: dataintegration-qa
+    
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC.
+    Type: String
+    Default: 10.95.48.0/20
+
+  PrefixSubName1:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: dataintegration-qa
+
+  PrivateSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet PrivateSubnet1.
+    Type: String
+    Default: 10.95.48.0/24
+
+  PrivateSubnet1Type:
+    Description: Please enter the purpose of private subnet PrivateSubnet1.
+    Type: String
+    Default: "-apps"
+    AllowedValues: ["-apps", "-emr", "-internet", " "] 
+
+  PrivateSubnet1AZ:
+    Description: Please enter the AZ of private subnet for PrivateSubnet1.
+    Type: String
+    Default: us-east-1a
+
+  PrefixSubName2:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: dataintegration-qa
+
+  PrivateSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet PrivateSubnet2.
+    Type: String
+    Default: 10.95.49.0/24
+
+  PrivateSubnet2Type:
+    Description: Please enter the purpose of private subnet PrivateSubnet2.
+    Type: String
+    Default: "-apps"
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PrivateSubnet2AZ:
+    Description: Please enter the AZ of private subnet for PrivateSubnet2.
+    Type: String
+    Default: us-east-1b
+
+  PrefixSubName3:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: dataintegration-qa
+
+  PrivateSubnet3CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet PrivateSubnet3.
+    Type: String
+    Default: 10.95.50.0/24
+
+  PrivateSubnet3Type:
+    Description: Please enter the purpose of private subnet PrivateSubnet3.
+    Type: String
+    Default: "-apps"
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PrivateSubnet3AZ:
+    Description: Please enter the AZ of private subnet for PrivateSubnet3.
+    Type: String
+    Default: us-east-1c
+
+  PrefixSubName4:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: dataintegration-qa
+
+  PrivateSubnet4CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet PrivateSubnet4.
+    Type: String
+    Default: 10.95.51.0/24
+
+  PrivateSubnet4Type:
+    Description: Please enter the purpose of private subnet PrivateSubnet4.
+    Type: String
+    Default: "-apps"
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PrivateSubnet4AZ:
+    Description: Please enter the AZ of private subnet for PrivateSubnet4.
+    Type: String
+    Default: us-east-1d
+
+  PrefixSubName5:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: dataintegration-qa
+
+  PrivateSubnet5CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet PrivateSubnet5.
+    Type: String
+    Default: 10.95.52.0/24
+
+  PrivateSubnet5Type:
+    Description: Please enter the purpose of private subnet PrivateSubnet5.
+    Type: String
+    Default: "-apps"
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PrivateSubnet5AZ:
+    Description: Please enter the AZ of private subnet for PrivateSubnet5.
+    Type: String
+    Default: us-east-1e
+  
+  PrefixSubName6:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: dataintegration-qa
+
+  PrivateSubnet6CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet PrivateSubnet6.
+    Type: String
+    Default: 10.95.53.0/24
+
+  PrivateSubnet6Type:
+    Description: Please enter the purpose of private subnet PrivateSubnet6.
+    Type: String
+    Default: "-apps"
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PrivateSubnet6AZ:
+    Description: Please enter the AZ of private subnet for PrivateSubnet6.
+    Type: String
+    Default: us-east-1f
+
+  PrefixSubName7:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: dataintegration-qa
+
+  PrivateSubnet7CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet PrivateSubnet7.
+    Type: String
+    Default: 10.95.54.0/23
+
+  PrivateSubnet7Type:
+    Description: Please enter the purpose of private subnet PrivateSubnet7.
+    Type: String
+    Default: "-emr"
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PrivateSubnet7AZ:
+    Description: Please enter the AZ of private subnet for PrivateSubnet7.
+    Type: String
+    Default: us-east-1a
+
+  PrefixSubName8:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: dataintegration-qa
+
+  PrivateSubnet8CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet PrivateSubnet8.
+    Type: String
+    Default: 10.95.56.0/23
+
+  PrivateSubnet8Type:
+    Description: Please enter the purpose of private subnet PrivateSubnet8.
+    Type: String
+    Default: "-emr"
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PrivateSubnet8AZ:
+    Description: Please enter the AZ of private subnet for PrivateSubnet8.
+    Type: String
+    Default: us-east-1b
+
+  PrefixSubName9:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: dataintegration-qa
+
+  PrivateSubnet9CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet PrivateSubnet9.
+    Type: String
+    Default: 10.95.58.0/23
+
+  PrivateSubnet9Type:
+    Description: Please enter the purpose of private subnet PrivateSubnet9.
+    Type: String
+    Default: "-emr"
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PrivateSubnet9AZ:
+    Description: Please enter the AZ of private subnet for PrivateSubnet9.
+    Type: String
+    Default: us-east-1c
+
+  PrefixSubName10:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: dataintegration-qa
+
+  PublicSubnet10CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet PublicSubnet10.
+    Type: String
+    Default: 10.95.60.0/25
+
+  PublicSubnet10Type:
+    Description: Please enter the purpose of public subnet PublicSubnet10.
+    Type: String
+    Default: "-internet"
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PublicSubnet10AZ:
+    Description: Please enter the AZ of public subnet for PublicSubnet10.
+    Type: String
+    Default: us-east-1a
+
+  PrefixSubName11:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: dataintegration-qa
+
+  PublicSubnet11CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet PublicSubnet11.
+    Type: String
+    Default: 10.95.60.128/25
+
+  PublicSubnet11Type:
+    Description: Please enter the purpose of public subnet PublicSubnet11.
+    Type: String
+    Default: "-internet"
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PublicSubnet11AZ:
+    Description: Please enter the AZ of public subnet for PublicSubnet11.
+    Type: String
+    Default: us-east-1b
+
+  PrefixSubName12:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: dataintegration-qa
+
+  PublicSubnet12CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet PublicSubnet12.
+    Type: String
+    Default: 10.95.61.0/25
+
+  PublicSubnet12Type:
+    Description: Please enter the purpose of public subnet PublicSubnet12.
+    Type: String
+    Default: "-internet"
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PublicSubnet12AZ:
+    Description: Please enter the AZ of public subnet for PublicSubnet12.
+    Type: String
+    Default: us-east-1c
+
+  PrefixSubName13:
+    Description: CommonName that is prefixed to subnets. 
+    Type: String
+    Default: dataintegration-qa
+
+  PublicSubnet13CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet PublicSubnet13.
+    Type: String
+    Default: 10.95.61.128/25
+
+  PublicSubnet13Type:
+    Description: Please enter the purpose of public subnet PublicSubnet13.
+    Type: String
+    Default: "-internet"
+    AllowedValues: ["-apps", "-emr", "-internet", " "]
+
+  PublicSubnet13AZ:
+    Description: Please enter the AZ of public subnet for PublicSubnet13.
+    Type: String
+    Default: us-east-1d
+  
+  CreateIGW:
+    Description: Please Select if Internet Gateway is Required. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+
+  CreateIGWRoute:
+    Description: Please Select if Internet Gateway Routes are Required in Public Subnet Route Table. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+  
+  CreateS3EP:
+    Description: Please Select if S3 Gateway EndPoint is Required. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+
+  CreateAGWEP:
+    Description: Please Select if API Gateway Interface EndPoint is Required. 
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+
+Conditions:
+  CreateIGW: !Equals
+    - !Ref CreateIGW
+    - true
+
+  CreateIGWRoute: !Equals
+    - !Ref CreateIGWRoute
+    - true
+
+  CreateS3EP: !Equals
+    - !Ref CreateS3EP
+    - true
+
+  CreateAGWEP: !Equals
+    - !Ref CreateAGWEP
+    - true
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${VPCName}
+  
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PrivateSubnet1AZ
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName1}${PrivateSubnet1Type}-${PrivateSubnet1AZ}
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PrivateSubnet2AZ
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName2}${PrivateSubnet2Type}-${PrivateSubnet2AZ}
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PrivateSubnet3AZ
+      CidrBlock: !Ref PrivateSubnet3CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName3}${PrivateSubnet3Type}-${PrivateSubnet3AZ}
+
+  PrivateSubnet4:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PrivateSubnet4AZ
+      CidrBlock: !Ref PrivateSubnet4CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName4}${PrivateSubnet4Type}-${PrivateSubnet4AZ}
+
+  PrivateSubnet5:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PrivateSubnet5AZ
+      CidrBlock: !Ref PrivateSubnet5CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName5}${PrivateSubnet5Type}-${PrivateSubnet5AZ}
+
+  PrivateSubnet6:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PrivateSubnet6AZ
+      CidrBlock: !Ref PrivateSubnet6CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName6}${PrivateSubnet6Type}-${PrivateSubnet6AZ}
+
+  PrivateSubnet7:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PrivateSubnet7AZ
+      CidrBlock: !Ref PrivateSubnet7CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName7}${PrivateSubnet7Type}-${PrivateSubnet7AZ}
+
+  PrivateSubnet8:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PrivateSubnet8AZ
+      CidrBlock: !Ref PrivateSubnet8CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName8}${PrivateSubnet8Type}-${PrivateSubnet8AZ}
+
+  PrivateSubnet9:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PrivateSubnet9AZ
+      CidrBlock: !Ref PrivateSubnet9CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName9}${PrivateSubnet9Type}-${PrivateSubnet9AZ}
+
+  PublicSubnet10:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PublicSubnet10AZ
+      CidrBlock: !Ref PublicSubnet10CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName10}${PublicSubnet10Type}-${PublicSubnet10AZ}
+
+  PublicSubnet11:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PublicSubnet11AZ
+      CidrBlock: !Ref PublicSubnet11CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName11}${PublicSubnet11Type}-${PublicSubnet11AZ}
+
+  PublicSubnet12:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PublicSubnet12AZ
+      CidrBlock: !Ref PublicSubnet12CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName12}${PublicSubnet12Type}-${PublicSubnet12AZ}
+
+  PublicSubnet13:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref PublicSubnet13AZ
+      CidrBlock: !Ref PublicSubnet13CIDR
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName13}${PublicSubnet13Type}-${PublicSubnet13AZ}
+  
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: CreateIGW
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+    Condition: CreateIGW
+  
+  PublicRouteTable10:
+    Type: AWS::EC2::RouteTable
+    Condition: CreateIGWRoute
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${PrefixSubName10}${PublicSubnet10Type}-${PublicSubnet10AZ}
+
+  PublicRoute10:
+    Type: AWS::EC2::Route
+    Condition: CreateIGWRoute
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable10
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation10:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateIGWRoute
+    Properties:
+      RouteTableId: !Ref PublicRouteTable10
+      SubnetId: !Ref PublicSubnet10
+
+  PublicSubnetRouteTableAssociation11:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateIGWRoute
+    Properties:
+      RouteTableId: !Ref PublicRouteTable10
+      SubnetId: !Ref PublicSubnet11
+
+  PublicSubnetRouteTableAssociation12:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateIGWRoute
+    Properties:
+      RouteTableId: !Ref PublicRouteTable10
+      SubnetId: !Ref PublicSubnet12
+
+  PublicSubnetRouteTableAssociation13:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateIGWRoute
+    Properties:
+      RouteTableId: !Ref PublicRouteTable10
+      SubnetId: !Ref PublicSubnet13
+
+  S3Endpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Condition: CreateS3EP
+    Properties:
+      RouteTableIds:
+        - !Ref PublicRouteTable10
+      VpcEndpointType: Gateway
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcId: !Ref VPC
+
+  AGWEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Condition: CreateAGWEP
+    Properties:
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+        - !Ref PrivateSubnet4
+        - !Ref PrivateSubnet5
+        - !Ref PrivateSubnet6
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.execute-api'
+      VpcId: !Ref VPC
